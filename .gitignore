@@ -16,6 +16,7 @@ yarn-error.*
 .expo/
 dist/
 .export-check/
+.ci-export/
 web-build/
 expo-env.d.ts
 *.orig.*
