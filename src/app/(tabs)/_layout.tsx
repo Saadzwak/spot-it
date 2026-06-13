@@ -21,7 +21,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="discover"
-        options={{ title: 'Découvrir', tabBarIcon: ({ color, size }) => <Icon name="cards" color={color as string} size={size} /> }}
+        options={{ title: 'Découvrir', tabBarIcon: ({ color, size }) => <Icon name="search" color={color as string} size={size} /> }}
       />
       <Tabs.Screen
         name="map"

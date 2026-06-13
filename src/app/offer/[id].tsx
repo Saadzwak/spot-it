@@ -57,13 +57,13 @@ export default function OfferDetail() {
       <View style={styles.cta}>
         <View style={{ flex: 1 }}>
           <PrimaryButton
-            label={saved ? 'Dans ta wishlist' : 'Ajouter à la wishlist'}
-            onPress={() => toggleWishlist(offer.id)}
-            icon={<Icon name={saved ? 'heartFill' : 'heart'} size={18} color="#fff" />}
+            label="Itinéraire"
+            onPress={() => router.push({ pathname: '/(tabs)/map', params: { route: offer.id } })}
+            icon={<Icon name="nav" size={18} color="#fff" />}
           />
         </View>
-        <Pressable style={styles.mapBtn} onPress={() => router.push('/(tabs)/map')}>
-          <Icon name="map" size={22} color={colors.ink} />
+        <Pressable style={styles.mapBtn} onPress={() => toggleWishlist(offer.id)} accessibilityLabel="Wishlist">
+          <Icon name={saved ? 'heartFill' : 'heart'} size={22} color={saved ? colors.accent : colors.ink} />
         </Pressable>
       </View>
     </View>

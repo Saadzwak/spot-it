@@ -1,19 +1,16 @@
 import { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Screen, SpotMark, PrimaryButton } from '@/components';
 import { colors, text, font } from '@/design/theme';
-import { useStore } from '@/store/useStore';
 
 export default function Landing() {
   const router = useRouter();
-  const offers = useStore((s) => s.offers);
-  const intent = useStore((s) => s.intent);
-  const near = offers.filter((o) => (o.distanceM ?? 9999) <= 1500).length || offers.length;
+  const go = () => router.replace('/(tabs)/discover');
 
-  const go = () => router.replace('/(tabs)/map');
   useEffect(() => {
-    const t = setTimeout(go, 2600);
+    const t = setTimeout(go, 2800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -21,14 +18,15 @@ export default function Landing() {
   return (
     <Screen>
       <View style={styles.wrap}>
-        <SpotMark size={64} />
-        <Text style={styles.title}>Ton terrain de jeu est prêt</Text>
-        <Text style={styles.count}>{near}</Text>
-        <Text style={styles.sub}>
-          {intent ? `offres analysées pour « ${intent} » près de toi` : 'offres repérées près de toi, triées pour ton profil'}
-        </Text>
-        <View style={{ height: 8 }} />
-        <PrimaryButton label="Voir la carte" onPress={go} />
+        <Animated.View entering={FadeIn.duration(450)}><SpotMark size={72} /></Animated.View>
+        <Animated.Text entering={FadeInDown.delay(180).duration(480)} style={styles.hi}>Bienvenue 👋</Animated.Text>
+        <Animated.Text entering={FadeInDown.delay(340).duration(480)} style={styles.title}>Ton terrain de jeu est prêt</Animated.Text>
+        <Animated.Text entering={FadeInDown.delay(500).duration(480)} style={styles.sub}>
+          Dis-nous ce que tu cherches — ou laisse Spot.it flairer les bons plans autour de toi.
+        </Animated.Text>
+        <Animated.View entering={FadeInDown.delay(700).duration(480)} style={{ marginTop: 12, alignSelf: 'stretch' }}>
+          <PrimaryButton label="C’est parti" onPress={go} />
+        </Animated.View>
       </View>
     </Screen>
   );
@@ -36,7 +34,7 @@ export default function Landing() {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 28 },
-  title: { ...text.h1, textAlign: 'center' },
-  count: { fontFamily: font.displayBold, fontSize: 64, color: colors.accent, lineHeight: 68 },
-  sub: { ...text.body, textAlign: 'center', maxWidth: 260, marginTop: -8 },
+  hi: { fontFamily: font.displayBold, fontSize: 18, color: colors.accentInk, letterSpacing: 0.5 },
+  title: { ...text.h1, fontSize: 32, textAlign: 'center' },
+  sub: { ...text.body, textAlign: 'center', maxWidth: 280 },
 });

@@ -1,6 +1,6 @@
-// MapWebView.tsx — wrapper RN autour de Mapbox GL JS (WebView).
-// Sans token `pk.` : affiche un fallback stylé (pas de crash, M0 reste vert).
-import React, { useMemo, useRef } from 'react';
+// MapWebView.tsx — wrapper RN autour de Mapbox GL JS (2D + itinéraire).
+// Sans token `pk.` : fallback stylé (pas de crash).
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import type { Offer } from '@/types/contracts';
@@ -12,46 +12,46 @@ import { buildMapHtml, type MapMarker } from './mapHtml';
 function initials(brand: string): string {
   return brand.split(' ').map((s) => s[0]).join('').slice(0, 2).toUpperCase();
 }
-
 function toMarkers(offers: Offer[]): MapMarker[] {
   return offers
     .filter((o) => o.lat != null && o.lng != null)
     .map((o) => ({
-      id: o.id, lat: o.lat as number, lng: o.lng as number,
-      image: o.image,
+      id: o.id, lat: o.lat as number, lng: o.lng as number, image: o.image,
       initials: initials(o.brand),
       color: (categories as any)[o.category]?.hue ?? colors.accent,
       sponsored: o.sponsored,
     }));
 }
 
+export interface MapEta { offerId: string; durationMin?: number; distanceM?: number; error?: string }
 export interface MapWebViewProps {
   offers: Offer[];
   center?: { lat: number; lng: number };
+  routeTo?: { id: string; lat: number; lng: number } | null;
   onSelectOffer?: (offerId: string) => void;
+  onEta?: (e: MapEta) => void;
 }
 
-export function MapWebView({ offers, center = DEMO_USER, onSelectOffer }: MapWebViewProps) {
+export function MapWebView({ offers, center = DEMO_USER, routeTo, onSelectOffer, onEta }: MapWebViewProps) {
   const ref = useRef<WebView>(null);
+  const ready = useRef(false);
   const html = useMemo(
     () => buildMapHtml({ token: ENV.mapboxToken, style: ENV.mapboxStyle, center, markers: toMarkers(offers) }),
     [offers, center],
   );
 
+  const sendRoute = () => {
+    if (!ready.current) return;
+    if (routeTo) ref.current?.postMessage(JSON.stringify({ type: 'route', lng: routeTo.lng, lat: routeTo.lat, offerId: routeTo.id }));
+    else ref.current?.postMessage(JSON.stringify({ type: 'clearRoute' }));
+  };
+  useEffect(sendRoute, [routeTo]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!hasMapbox()) {
     return (
       <View style={styles.fallback}>
         <Text style={styles.fallbackTitle}>Carte</Text>
-        <Text style={styles.fallbackBody}>
-          Ajoute <Text style={styles.code}>EXPO_PUBLIC_MAPBOX_TOKEN</Text> (clé pk.) dans .env pour activer la carte Mapbox.
-        </Text>
-        <View style={styles.bubbleRow}>
-          {toMarkers(offers).slice(0, 6).map((m) => (
-            <View key={m.id} style={[styles.bubble, { backgroundColor: m.color }]}>
-              <Text style={styles.bubbleTxt}>{m.initials}</Text>
-            </View>
-          ))}
-        </View>
+        <Text style={styles.fallbackBody}>Ajoute <Text style={styles.code}>EXPO_PUBLIC_MAPBOX_TOKEN</Text> (pk.) dans .env.</Text>
       </View>
     );
   }
@@ -59,10 +59,10 @@ export function MapWebView({ offers, center = DEMO_USER, onSelectOffer }: MapWeb
   const onMessage = (e: WebViewMessageEvent) => {
     try {
       const d = JSON.parse(e.nativeEvent.data);
-      if (d?.type === 'select' && d.offerId) onSelectOffer?.(d.offerId);
-    } catch {
-      /* ignore */
-    }
+      if (d?.type === 'ready') { ready.current = true; sendRoute(); }
+      else if (d?.type === 'select' && d.offerId) onSelectOffer?.(d.offerId);
+      else if (d?.type === 'eta') onEta?.(d as MapEta);
+    } catch { /* ignore */ }
   };
 
   return (
@@ -81,13 +81,10 @@ export function MapWebView({ offers, center = DEMO_USER, onSelectOffer }: MapWeb
 
 const styles = StyleSheet.create({
   web: { flex: 1, backgroundColor: colors.canvas },
-  fallback: { flex: 1, backgroundColor: colors.canvas, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 14 },
+  fallback: { flex: 1, backgroundColor: colors.canvas, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 10 },
   fallbackTitle: { fontSize: 22, fontWeight: '700', color: colors.ink },
   fallbackBody: { fontSize: 14, color: colors.ink2, textAlign: 'center', lineHeight: 20 },
   code: { color: colors.accentInk, fontWeight: '700' },
-  bubbleRow: { flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' },
-  bubble: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
-  bubbleTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
 
 export default MapWebView;

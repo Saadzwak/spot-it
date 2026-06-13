@@ -26,6 +26,7 @@ interface SpotState {
   remainingIds: string[];
   deck: Offer[];
   userLoc: { lat: number; lng: number } | null;
+  matchedIds: string[] | null; // filtre intention : null = pas de filtre, [] = rien ne correspond
   // signaux
   wishlist: string[];
   liked: string[];
@@ -56,6 +57,7 @@ export const useStore = create<SpotState>()(
       remainingIds: OFFERS.map((o) => o.id),
       deck: [],
       userLoc: null,
+      matchedIds: null,
       wishlist: [],
       liked: [],
       lastReason: null,
@@ -73,11 +75,15 @@ export const useStore = create<SpotState>()(
         get().rebuildDeck();
       },
 
-      // Découvrir : l'utilisateur déclare une envie → booste les features visées.
+      // Découvrir : l'utilisateur déclare une envie → booste les features + FILTRE.
       applyIntent: (picks, summary) => {
         const t = { ...get().taste };
         for (const k of picks) t[k] = (t[k] ?? 0) + 1.0;
-        set({ taste: t, intent: summary ?? get().intent });
+        const cats = picks.filter((p) => p.startsWith('cat:')).map((p) => p.slice(4));
+        const matchedIds = cats.length
+          ? get().offers.filter((o) => cats.includes(o.category)).map((o) => o.id)
+          : null; // pas de catégorie déduite → on garde tout (ex. "décide pour moi")
+        set({ taste: t, intent: summary ?? get().intent, matchedIds });
         get().rebuildDeck();
       },
 
