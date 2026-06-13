@@ -47,7 +47,13 @@
           "locationWhenInUsePermission": "Spot.it utilise ta position pour repérer les meilleures offres autour de toi."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Spot.it utilise la caméra pour la vue en réalité augmentée des offres autour de toi."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false,

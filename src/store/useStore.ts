@@ -10,6 +10,7 @@ import {
 } from '@/learning/features';
 import OFFERS from '@/data/offers.seed';
 import { persistSwipeRemote } from '@/agents/recommend';
+import { anchorOffers } from '@/geo/anchor';
 
 const DEFAULT_CONSENT: Consent = { location: false, personalization: true, share_data: false };
 
@@ -24,6 +25,7 @@ interface SpotState {
   offers: Offer[];
   remainingIds: string[];
   deck: Offer[];
+  userLoc: { lat: number; lng: number } | null;
   // signaux
   wishlist: string[];
   liked: string[];
@@ -32,6 +34,8 @@ interface SpotState {
 
   // actions
   hydrateOffers: (offers?: Offer[]) => void;
+  setUserLoc: (coords: { lat: number; lng: number }) => void;
+  applyIntent: (picks: string[], summary?: string) => void;
   completeOnboarding: (picks: string[], intent?: string, consent?: Partial<Consent>) => void;
   rebuildDeck: () => void;
   swipe: (offerId: string, accepted: boolean) => void;
@@ -51,6 +55,7 @@ export const useStore = create<SpotState>()(
       offers: OFFERS,
       remainingIds: OFFERS.map((o) => o.id),
       deck: [],
+      userLoc: null,
       wishlist: [],
       liked: [],
       lastReason: null,
@@ -59,6 +64,20 @@ export const useStore = create<SpotState>()(
       hydrateOffers: (offers) => {
         const list = offers && offers.length ? offers : OFFERS;
         set({ offers: list, remainingIds: list.map((o) => o.id) });
+        get().rebuildDeck();
+      },
+
+      setUserLoc: (coords) => {
+        const anchored = anchorOffers(OFFERS, coords);
+        set({ userLoc: coords, offers: anchored, remainingIds: anchored.map((o) => o.id) });
+        get().rebuildDeck();
+      },
+
+      // Découvrir : l'utilisateur déclare une envie → booste les features visées.
+      applyIntent: (picks, summary) => {
+        const t = { ...get().taste };
+        for (const k of picks) t[k] = (t[k] ?? 0) + 1.0;
+        set({ taste: t, intent: summary ?? get().intent });
         get().rebuildDeck();
       },
 

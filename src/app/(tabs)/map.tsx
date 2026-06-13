@@ -7,11 +7,15 @@ import { useStore } from '@/store/useStore';
 import { rankOffers } from '@/learning/features';
 import { MapWebView } from '@/map/MapWebView';
 import { fireProximityNotification } from '@/geo/notify';
+import { useRealLocation } from '@/geo/useLocation';
+import { DEMO_USER } from '@/data/offers.seed';
 
 export default function MapScreen() {
   const router = useRouter();
+  useRealLocation(); // vraie position GPS → ré-ancre les offres
   const offers = useStore((s) => s.offers);
   const taste = useStore((s) => s.taste);
+  const userLoc = useStore((s) => s.userLoc);
   // les plus pertinentes d'abord (bandit), cap pour garder la carte lisible
   const mapOffers = useMemo(() => rankOffers(taste, offers).slice(0, 24), [taste, offers]);
 
@@ -30,8 +34,13 @@ export default function MapScreen() {
       <View style={styles.mapWrap}>
         <MapWebView
           offers={mapOffers}
+          center={userLoc ?? DEMO_USER}
           onSelectOffer={(id) => router.push({ pathname: '/offer/[id]', params: { id } })}
         />
+        <Pressable style={styles.arBtn} onPress={() => router.push('/ar')}>
+          <Icon name="target" size={18} color="#fff" />
+          <Text style={styles.simulateTxt}>Vue AR</Text>
+        </Pressable>
         <Pressable style={styles.simulate} onPress={simulate} onLongPress={simulate}>
           <Icon name="bell" size={16} color="#fff" />
           <Text style={styles.simulateTxt}>Simuler la marche</Text>
@@ -54,4 +63,8 @@ const styles = StyleSheet.create({
     ...shadows.card, shadowColor: colors.accent,
   },
   simulateTxt: { fontFamily: font.bodyBold, fontSize: 14, color: '#fff' },
+  arBtn: {
+    position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.ink, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 999, ...shadows.card,
+  },
 });

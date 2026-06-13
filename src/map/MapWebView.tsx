@@ -18,6 +18,7 @@ function toMarkers(offers: Offer[]): MapMarker[] {
     .filter((o) => o.lat != null && o.lng != null)
     .map((o) => ({
       id: o.id, lat: o.lat as number, lng: o.lng as number,
+      image: o.image,
       initials: initials(o.brand),
       color: (categories as any)[o.category]?.hue ?? colors.accent,
       sponsored: o.sponsored,
