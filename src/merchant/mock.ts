@@ -121,3 +121,24 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   maison: 'Maison',
   beaute: 'Beauté',
 };
+
+// ── Campagnes (mode démo) ─────────────────────────────────────────────────────
+export interface MerchantCampaign {
+  id: string;
+  categories: Category[];
+  radiusM: number;
+  budgetCents: number;
+  spendCents: number;
+  status: 'active' | 'paused';
+}
+
+export const MOCK_CAMPAIGNS: MerchantCampaign[] = [
+  { id: 'camp-1', categories: ['mode'],         radiusM: 800,  budgetCents: 5000, spendCents: 3120, status: 'active' },
+  { id: 'camp-2', categories: ['mode', 'beaute'], radiusM: 1500, budgetCents: 8000, spendCents: 1450, status: 'paused' },
+];
+
+export function campaignLabel(c: Pick<MerchantCampaign, 'categories' | 'radiusM'>): string {
+  const cats = c.categories.map((k) => CATEGORY_LABELS[k]).join(' · ');
+  const radius = c.radiusM >= 1000 ? `${(c.radiusM / 1000).toLocaleString('fr-FR')} km` : `${c.radiusM} m`;
+  return `${cats || 'Toutes catégories'} — ${radius}`;
+}

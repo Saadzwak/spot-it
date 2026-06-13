@@ -31,7 +31,7 @@ export default function MerchantLayout() {
   const pathname = usePathname();
   const { width } = useWindowDimensions();
   const isLive = hasSupabase();
-  const { session, loading: sessionLoading, live } = useMerchantSession();
+  const { session, loading: sessionLoading, live, signOut } = useMerchantSession();
 
   const isLogin = pathname.endsWith('/login');
 
@@ -83,10 +83,22 @@ export default function MerchantLayout() {
             </Pressable>
             <Text style={styles.brand}>Espace magasin</Text>
           </View>
-          {/* Live / Démo indicator */}
-          <View style={styles.badge}>
-            <View style={[styles.badgeDot, { backgroundColor: isLive ? '#34C759' : colors.ink3 }]} />
-            <Text style={styles.badgeLabel}>{isLive ? 'temps réel' : 'démo'}</Text>
+          {/* Live / Démo indicator + déconnexion */}
+          <View style={styles.headerRight}>
+            <View style={styles.badge}>
+              <View style={[styles.badgeDot, { backgroundColor: isLive ? '#34C759' : colors.ink3 }]} />
+              <Text style={styles.badgeLabel}>{isLive ? 'temps réel' : 'démo'}</Text>
+            </View>
+            {live && session && !session.demo && (
+              <Pressable
+                onPress={() => { void signOut(); router.replace('/(merchant)/login'); }}
+                hitSlop={8}
+                style={({ pressed }) => [styles.logoutBtn, pressed && styles.backBtnPressed]}
+                accessibilityLabel="Se déconnecter"
+              >
+                <Text style={styles.logoutLabel}>Déconnexion</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       </View>
@@ -150,6 +162,23 @@ const styles = StyleSheet.create({
   },
   backBtnPressed: {
     opacity: 0.6,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logoutBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.canvas,
+  },
+  logoutLabel: {
+    fontFamily: font.bodySemiBold,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.ink2,
   },
   brand: {
     fontFamily: font.displaySemiBold,

@@ -9,17 +9,17 @@ import {
   View,
   Text,
   ScrollView,
+  Pressable,
   StyleSheet,
   useWindowDimensions,
   Platform,
 } from 'react-native';
 import { colors, radius, shadows } from '@/design/tokens';
 import { font } from '@/design/theme';
-import { SectionTitle, PrimaryButton, GhostButton, CatChip } from '@/components';
+import { SectionTitle, PrimaryButton, CatChip, Card } from '@/components';
 import { SelectPill, Stepper } from '@/merchant/components';
-import { hasSupabase } from '@/lib/env';
-import { getSupabase } from '@/lib/supabase';
-import { DEMO_STORE_ID } from '@/merchant/mock';
+import { useCampaigns } from '@/merchant/useMerchantData';
+import { campaignLabel } from '@/merchant/mock';
 import { WALLET_ARCHETYPES } from '@/data/onboarding';
 import type { Category, PriceBand } from '@/types/contracts';
 
@@ -59,8 +59,8 @@ export default function Targeting(): React.ReactElement {
   const [radiusM, setRadiusM]           = useState(800);
   const [selectedDayparts, setDayparts] = useState<Set<string>>(new Set(['matin', 'soir']));
   const [budgetCents, setBudgetCents]   = useState(5000);
-  const [status, setStatus]             = useState<'draft' | 'active' | 'paused'>('draft');
   const [working, setWorking]           = useState(false);
+  const { campaigns, setStatus: setCampaignStatus, add } = useCampaigns();
 
   const toggleSet = <T,>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, min = 0) =>
     (v: T) => setter((prev) => {
@@ -87,45 +87,18 @@ export default function Targeting(): React.ReactElement {
     return Math.round((pool * rf * dp * bandFactor) / 100) * 100;
   }, [selectedCats, radiusM, selectedDayparts, selectedBands]);
 
-  const daypartHours: Record<string, [number, number]> = {
-    matin: [8, 12], midi: [12, 14], soir: [18, 22], weekend: [10, 20],
-  };
-
-  const persist = async (newStatus: 'active' | 'paused') => {
-    if (!hasSupabase()) return;
-    const supabase = getSupabase();
-    if (!supabase) return;
-    try {
-      const days = Array.from(selectedDayparts);
-      const hours = days.reduce<[number, number]>(
-        (acc, id) => { const h = daypartHours[id] ?? [9, 18]; return [Math.min(acc[0], h[0]), Math.max(acc[1], h[1])]; },
-        [23, 0],
-      );
-      await supabase.from('campaigns').insert({
-        store_id: DEMO_STORE_ID,
-        audience: {
-          categories: Array.from(selectedCats),
-          archetypes: Array.from(selectedArchs),
-          price_bands: Array.from(selectedBands),
-        },
-        radius_m: radiusM,
-        daypart: { days, hours },
-        budget_cents: budgetCents,
-        spend_cents: 0,
-        status: newStatus,
-      });
-    } catch { /* optimiste */ }
-  };
-
   const handleLaunch = async () => {
     if (working) return;
     setWorking(true);
-    setStatus('active');           // optimiste
-    await persist('active');
+    await add({
+      categories: Array.from(selectedCats),
+      radiusM,
+      budgetCents,
+    });
     setWorking(false);
   };
-  const handlePause  = () => setStatus('paused');
-  const handleResume = () => setStatus('active');
+
+  const fmtEuros = (cents: number) => `${(cents / 100).toFixed(0)} €`;
 
   return (
     <ScrollView
@@ -203,32 +176,47 @@ export default function Targeting(): React.ReactElement {
         <Text style={styles.reachSub}>par semaine, dans votre zone et vos créneaux</Text>
       </View>
 
-      {/* ── État + actions ─────────────────────────────────────────────────── */}
-      {status !== 'draft' && (
-        <View style={[styles.statusBanner, status === 'paused' && styles.statusPaused]}>
-          <View style={[styles.statusDot, { backgroundColor: status === 'active' ? '#1FA463' : colors.ink3 }]} />
-          <Text style={styles.statusText}>
-            {status === 'active' ? 'Campagne active' : 'Campagne en pause'}
-          </Text>
-          <Text style={styles.statusSub}>
-            {hasSupabase() ? 'Synchronisée en base.' : 'Mode démo.'}
-          </Text>
-        </View>
-      )}
-
+      {/* ── Lancer ─────────────────────────────────────────────────────────── */}
       <View style={styles.ctaRow}>
-        {status === 'active' ? (
-          <GhostButton label="Mettre en pause" onPress={handlePause} />
-        ) : status === 'paused' ? (
-          <PrimaryButton label="Reprendre" onPress={handleResume} />
-        ) : (
-          <PrimaryButton
-            label={working ? 'Lancement…' : 'Lancer la campagne'}
-            onPress={handleLaunch}
-            disabled={working}
-          />
-        )}
+        <PrimaryButton
+          label={working ? 'Lancement…' : 'Lancer la campagne'}
+          onPress={handleLaunch}
+          disabled={working}
+        />
       </View>
+
+      {/* ── Campagnes existantes ───────────────────────────────────────────── */}
+      <SectionTitle style={styles.campaignsTitle}>Vos campagnes</SectionTitle>
+      {campaigns.length === 0 ? (
+        <Card style={styles.emptyCard}>
+          <Text style={styles.emptyText}>Aucune campagne active. Lancez-en une ci-dessus.</Text>
+        </Card>
+      ) : (
+        <Card style={styles.campaignsCard}>
+          {campaigns.map((c, idx) => {
+            const active = c.status === 'active';
+            return (
+              <View key={c.id} style={[styles.campaignRow, idx > 0 && styles.campaignBorder]}>
+                <View style={styles.campaignMeta}>
+                  <View style={styles.campaignTop}>
+                    <View style={[styles.statusDot, { backgroundColor: active ? '#1FA463' : colors.ink3 }]} />
+                    <Text style={styles.campaignLabel} numberOfLines={1}>{campaignLabel(c)}</Text>
+                  </View>
+                  <Text style={styles.campaignSub}>
+                    {fmtEuros(c.spendCents)} / {fmtEuros(c.budgetCents)} · {active ? 'active' : 'en pause'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setCampaignStatus(c.id, active ? 'paused' : 'active')}
+                  style={({ pressed }) => [styles.campaignBtn, pressed && { opacity: 0.6 }]}
+                >
+                  <Text style={styles.campaignBtnText}>{active ? 'Pause' : 'Reprendre'}</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </Card>
+      )}
 
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -281,19 +269,30 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   reachSub: { fontFamily: font.body, fontSize: 13, color: colors.accentInk, opacity: 0.8, marginTop: 2 },
-  statusBanner: {
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  ctaRow: { marginTop: 4 },
+  // campagnes
+  campaignsTitle: { marginTop: 32, marginBottom: 12 },
+  emptyCard: { padding: 22, alignItems: 'center' },
+  emptyText: { fontFamily: font.body, fontSize: 14, color: colors.ink3, textAlign: 'center', lineHeight: 20 },
+  campaignsCard: { paddingVertical: 4 },
+  campaignRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    padding: 14,
-    marginBottom: 16,
-    ...shadows.sm,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  statusPaused: { opacity: 0.9 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontFamily: font.bodySemiBold, fontSize: 14, fontWeight: '600', color: colors.ink },
-  statusSub: { fontFamily: font.body, fontSize: 12, color: colors.ink3, marginLeft: 'auto' },
-  ctaRow: { marginTop: 4 },
+  campaignBorder: { borderTopWidth: 1, borderTopColor: colors.line },
+  campaignMeta: { flex: 1, gap: 4 },
+  campaignTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  campaignLabel: { flex: 1, fontFamily: font.bodySemiBold, fontSize: 14, fontWeight: '600', color: colors.ink },
+  campaignSub: { fontFamily: font.body, fontSize: 12, color: colors.ink3 },
+  campaignBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.canvas,
+  },
+  campaignBtnText: { fontFamily: font.bodySemiBold, fontSize: 13, fontWeight: '600', color: colors.ink },
 });

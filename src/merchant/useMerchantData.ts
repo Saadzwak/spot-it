@@ -7,14 +7,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { hasSupabase } from '@/lib/env';
 import { getSupabase } from '@/lib/supabase';
-import type { StoreKpis, OfferStat, Offer } from '@/types/contracts';
+import type { StoreKpis, OfferStat, Offer, Category } from '@/types/contracts';
 import {
   MOCK_OFFER_STATS,
   MOCK_MERCHANT_OFFERS,
   MOCK_KPIS_BY_PERIOD,
   MOCK_ARCHETYPE_SHARES,
+  MOCK_CAMPAIGNS,
   DEMO_STORE_ID,
   type Period,
+  type MerchantCampaign,
 } from './mock';
 import { audienceByCategory, audienceByPriceBand, type Slice } from './insights';
 import { categories } from '@/design/tokens';
@@ -275,6 +277,103 @@ export async function setOfferActiveRemote(id: string, active: boolean): Promise
   if (!supabase) return;
   try { await supabase.from('offers').update({ is_active: active }).eq('id', id); }
   catch { /* ignore */ }
+}
+
+export async function deleteOfferRemote(id: string): Promise<void> {
+  const supabase = hasSupabase() ? getSupabase() : null;
+  if (!supabase) return;
+  try { await supabase.from('offers').delete().eq('id', id); }
+  catch { /* ignore */ }
+}
+
+// ── useCampaigns ────────────────────────────────────────────────────────────
+// Liste des campagnes + pause/reprise (optimiste) + création best-effort.
+interface CampaignRow {
+  id: string;
+  audience: { categories?: Category[] } | null;
+  radius_m: number;
+  budget_cents: number;
+  spend_cents: number;
+  status: string;
+}
+
+export function useCampaigns(): {
+  campaigns: MerchantCampaign[];
+  loading: boolean;
+  setStatus: (id: string, status: 'active' | 'paused') => void;
+  add: (draft: { categories: Category[]; radiusM: number; budgetCents: number }) => Promise<void>;
+} {
+  const [campaigns, setCampaigns] = useState<MerchantCampaign[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const supabase = hasSupabase() ? getSupabase() : null;
+    if (!supabase) { setCampaigns(MOCK_CAMPAIGNS); setLoading(false); return; }
+
+    let mounted = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('campaigns')
+          .select('id,audience,radius_m,budget_cents,spend_cents,status')
+          .eq('store_id', DEMO_STORE_ID)
+          .order('created_at', { ascending: false });
+        if (!mounted) return;
+        if (error || !data || data.length === 0) setCampaigns(MOCK_CAMPAIGNS);
+        else setCampaigns((data as CampaignRow[]).map((r) => ({
+          id: String(r.id),
+          categories: r.audience?.categories ?? [],
+          radiusM: r.radius_m,
+          budgetCents: r.budget_cents,
+          spendCents: r.spend_cents,
+          status: r.status === 'paused' ? 'paused' : 'active',
+        })));
+        setLoading(false);
+      } catch {
+        if (mounted) { setCampaigns(MOCK_CAMPAIGNS); setLoading(false); }
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const setStatus = useCallback((id: string, status: 'active' | 'paused') => {
+    setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c))); // optimiste
+    const supabase = hasSupabase() ? getSupabase() : null;
+    if (supabase) { void supabase.from('campaigns').update({ status }).eq('id', id).then(() => {}, () => {}); }
+  }, []);
+
+  const add = useCallback(async (draft: { categories: Category[]; radiusM: number; budgetCents: number }) => {
+    const optimistic: MerchantCampaign = {
+      id: `camp-${Date.now()}`,
+      categories: draft.categories,
+      radiusM: draft.radiusM,
+      budgetCents: draft.budgetCents,
+      spendCents: 0,
+      status: 'active',
+    };
+    setCampaigns((prev) => [optimistic, ...prev]); // optimiste
+    const supabase = hasSupabase() ? getSupabase() : null;
+    if (!supabase) return;
+    try {
+      const { data } = await supabase
+        .from('campaigns')
+        .insert({
+          store_id: DEMO_STORE_ID,
+          audience: { categories: draft.categories },
+          radius_m: draft.radiusM,
+          budget_cents: draft.budgetCents,
+          spend_cents: 0,
+          status: 'active',
+        })
+        .select('id')
+        .single();
+      if (data?.id) {
+        setCampaigns((prev) => prev.map((c) => (c.id === optimistic.id ? { ...c, id: String(data.id) } : c)));
+      }
+    } catch { /* optimiste : on garde l'id local */ }
+  }, []);
+
+  return { campaigns, loading, setStatus, add };
 }
 
 // ── useMerchantSession ─────────────────────────────────────────────────────────

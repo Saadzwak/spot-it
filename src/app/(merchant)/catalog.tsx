@@ -24,6 +24,7 @@ import {
   BrandAvatar,
   CatDot,
   Toggle,
+  Icon,
 } from '@/components';
 import {
   OfferCardPreview,
@@ -35,6 +36,7 @@ import {
   useMerchantOffers,
   saveOfferRemote,
   setOfferActiveRemote,
+  deleteOfferRemote,
 } from '@/merchant/useMerchantData';
 import { CATEGORY_LABELS, PRICE_BAND_LABELS } from '@/merchant/mock';
 import type { Offer, Category, PriceBand, OfferType } from '@/types/contracts';
@@ -190,8 +192,25 @@ export default function Catalog(): React.ReactElement {
     void setOfferActiveRemote(id, next);
   };
 
+  // Recherche + confirmation de suppression
+  const [query, setQuery] = useState('');
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
   // Éditeur
   const [editing, setEditing] = useState<{ id: string | null; draft: OfferDraft } | null>(null);
+
+  const duplicate = (offer: Offer) => {
+    const id = `copy-${Date.now()}-${offer.id}`;
+    const copy: Offer = { ...offer, id, title: `${offer.title} (copie)`, sponsored: false };
+    setOffers((prev) => [copy, ...prev]);
+    void saveOfferRemote(offerToDraft(copy));
+  };
+
+  const remove = (id: string) => {
+    setOffers((prev) => prev.filter((o) => o.id !== id)); // optimiste
+    setConfirmId(null);
+    void deleteOfferRemote(id);
+  };
 
   const handleSave = (draft: OfferDraft) => {
     if (editing?.id) {
@@ -219,10 +238,16 @@ export default function Catalog(): React.ReactElement {
   };
 
   const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? offers.filter((o) => o.brand.toLowerCase().includes(q) || o.title.toLowerCase().includes(q))
+      : offers;
     const groups: Record<string, Offer[]> = {};
-    for (const o of offers) (groups[o.category] ??= []).push(o);
+    for (const o of filtered) (groups[o.category] ??= []).push(o);
     return groups;
-  }, [offers]);
+  }, [offers, query]);
+
+  const hasResults = Object.keys(grouped).length > 0;
 
   // ── Éditeur plein écran ──
   if (editing) {
@@ -260,12 +285,37 @@ export default function Catalog(): React.ReactElement {
         />
       </View>
 
+      {/* Recherche */}
+      {offers.length > 0 && (
+        <View style={styles.searchBar}>
+          <Icon name="search" size={18} color={colors.ink3} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Rechercher une offre…"
+            placeholderTextColor={colors.ink3}
+            style={styles.searchInput}
+            autoCapitalize="none"
+          />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Effacer la recherche">
+              <Icon name="x" size={16} color={colors.ink3} />
+            </Pressable>
+          )}
+        </View>
+      )}
+
       {loading && offers.length === 0 ? (
         <Text style={styles.loadingText}>Chargement…</Text>
       ) : offers.length === 0 ? (
         <Card style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Aucune offre encore</Text>
           <Text style={styles.emptyText}>Créez votre première offre pour apparaître dans le deck shopper.</Text>
+        </Card>
+      ) : !hasResults ? (
+        <Card style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>Aucun résultat</Text>
+          <Text style={styles.emptyText}>Aucune offre ne correspond à « {query} ».</Text>
         </Card>
       ) : (
         (Object.keys(grouped) as Category[]).map((cat) => (
@@ -287,7 +337,28 @@ export default function Catalog(): React.ReactElement {
                       <Text style={styles.offerTitle} numberOfLines={1}>{offer.title}</Text>
                     </View>
                   </Pressable>
-                  <Toggle value={isActive(offer.id)} onValueChange={() => toggleActive(offer.id)} />
+
+                  {confirmId === offer.id ? (
+                    <View style={styles.confirmRow}>
+                      <Text style={styles.confirmText}>Supprimer ?</Text>
+                      <Pressable onPress={() => remove(offer.id)} hitSlop={6} style={styles.confirmYes}>
+                        <Text style={styles.confirmYesText}>Oui</Text>
+                      </Pressable>
+                      <Pressable onPress={() => setConfirmId(null)} hitSlop={6} style={styles.confirmNo}>
+                        <Text style={styles.confirmNoText}>Non</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.rowActions}>
+                      <Pressable onPress={() => duplicate(offer)} hitSlop={6} style={styles.iconBtn} accessibilityLabel="Dupliquer l’offre">
+                        <Icon name="cards" size={18} color={colors.ink3} />
+                      </Pressable>
+                      <Pressable onPress={() => setConfirmId(offer.id)} hitSlop={6} style={styles.iconBtn} accessibilityLabel="Supprimer l’offre">
+                        <Icon name="x" size={18} color={colors.accent} />
+                      </Pressable>
+                      <Toggle value={isActive(offer.id)} onValueChange={() => toggleActive(offer.id)} />
+                    </View>
+                  )}
                 </View>
               ))}
             </Card>
@@ -349,6 +420,34 @@ const styles = StyleSheet.create({
   offerMeta: { flex: 1, gap: 2 },
   offerBrand: { fontFamily: font.bodySemiBold, fontSize: 14, fontWeight: '600', color: colors.ink },
   offerTitle: { fontFamily: font.body, fontSize: 12, color: colors.ink3, lineHeight: 16 },
+  // search
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 4,
+    ...shadows.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: font.body,
+    fontSize: 15,
+    color: colors.ink,
+    padding: 0,
+  },
+  // row actions
+  rowActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  iconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
+  confirmRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  confirmText: { fontFamily: font.bodyMedium, fontSize: 13, color: colors.ink2 },
+  confirmYes: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: colors.accent },
+  confirmYesText: { fontFamily: font.bodySemiBold, fontSize: 13, fontWeight: '600', color: colors.white },
+  confirmNo: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: colors.canvas },
+  confirmNoText: { fontFamily: font.bodySemiBold, fontSize: 13, fontWeight: '600', color: colors.ink2 },
   // empty
   emptyCard: { padding: 28, alignItems: 'center', gap: 6 },
   emptyTitle: { fontFamily: font.displaySemiBold, fontSize: 18, fontWeight: '600', color: colors.ink },
