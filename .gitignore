@@ -45,3 +45,6 @@ Thumbs.db
 
 # ── Design source archive (kept extracted in design-ref/) ──
 VCA.zip
+
+# one-off local DB setup script (never commit)
+_dbsetup.mjs

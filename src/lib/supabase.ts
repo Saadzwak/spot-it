@@ -1,5 +1,6 @@
 // Client Supabase — créé PARESSEUSEMENT et seulement si hasSupabase().
 // En M0 (USE_BACKEND=false) il n'est jamais instancié → zéro réseau, zéro dépendance runtime.
+import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { ENV, hasSupabase } from './env';
