@@ -26,7 +26,8 @@ interface SpotState {
   remainingIds: string[];
   deck: Offer[];
   userLoc: { lat: number; lng: number } | null;
-  matchedIds: string[] | null; // filtre intention : null = pas de filtre, [] = rien ne correspond
+  matchedIds: string[] | null; // sélection agent : null = pas de filtre, [] = rien ne correspond
+  intentHeadline: string | null;
   // signaux
   wishlist: string[];
   liked: string[];
@@ -37,6 +38,7 @@ interface SpotState {
   hydrateOffers: (offers?: Offer[]) => void;
   setUserLoc: (coords: { lat: number; lng: number }) => void;
   applyIntent: (picks: string[], summary?: string) => void;
+  setMatched: (ids: string[] | null, headline?: string | null) => void;
   completeOnboarding: (picks: string[], intent?: string, consent?: Partial<Consent>) => void;
   rebuildDeck: () => void;
   swipe: (offerId: string, accepted: boolean) => void;
@@ -58,6 +60,7 @@ export const useStore = create<SpotState>()(
       deck: [],
       userLoc: null,
       matchedIds: null,
+      intentHeadline: null,
       wishlist: [],
       liked: [],
       lastReason: null,
@@ -84,6 +87,12 @@ export const useStore = create<SpotState>()(
           ? get().offers.filter((o) => cats.includes(o.category)).map((o) => o.id)
           : null; // pas de catégorie déduite → on garde tout (ex. "décide pour moi")
         set({ taste: t, intent: summary ?? get().intent, matchedIds });
+        get().rebuildDeck();
+      },
+
+      // Sélection faite par l'agent de curation (Claude) : ids exacts à montrer.
+      setMatched: (ids, headline) => {
+        set({ matchedIds: ids, intentHeadline: headline ?? get().intentHeadline });
         get().rebuildDeck();
       },
 

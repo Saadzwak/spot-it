@@ -25,7 +25,7 @@ export const WALLET_ARCHETYPES: Archetype[] = [
     picks: [offerTypeKey('exclusive'), priceBandKey('100+'), priceBandKey('50-100')] },
   { id: 'malin', label: 'L’œil du bon plan', emoji: '🦅', sub: 'Toujours le bon deal au bon moment',
     picks: [offerTypeKey('discount'), offerTypeKey('gift'), priceBandKey('20-50'), priceBandKey('50-100')] },
-  { id: 'radin', label: 'Radin sur pâte', emoji: '🧀', sub: 'Chaque euro compte, et c’est assumé',
+  { id: 'econome', label: 'Économe dans l’âme', emoji: '🐿️', sub: 'Je traque le meilleur prix, toujours',
     picks: [offerTypeKey('discount'), offerTypeKey('voucher'), priceBandKey('0-20'), priceBandKey('20-50')] },
   { id: 'standing', label: 'Question de standing', emoji: '👑', sub: 'La qualité et l’exclu, rien d’autre',
     picks: [offerTypeKey('exclusive'), priceBandKey('100+')] },

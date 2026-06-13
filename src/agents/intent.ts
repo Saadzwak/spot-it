@@ -3,6 +3,9 @@
 // repli LOCAL par mots-clés (le flux ne casse jamais).
 import Constants from 'expo-constants';
 import { catKey, offerTypeKey, priceBandKey } from '@/learning/features';
+import type { Offer } from '@/types/contracts';
+
+export interface CurateResult { offerIds: string[]; headline: string }
 
 export interface FollowupQ { id: string; question: string; options: string[] }
 
@@ -73,4 +76,43 @@ export function buildIntentPicks(intent: string, answers: Record<string, string>
   if (/cadeau|offrir|gift/.test(s)) picks.add(offerTypeKey('gift'));
   if (/exclu|haut de gamme|premium|luxe/.test(s)) picks.add(offerTypeKey('exclusive'));
   return { picks: [...picks], summary: intent.trim() };
+}
+
+/** Agent de curation : sélectionne les offres pertinentes (Claude, repli local). */
+export async function curateOffers(intent: string, answers: Record<string, string>, offers: Offer[]): Promise<CurateResult> {
+  const url = devServerUrl('/api/curate');
+  if (url) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 9000);
+      const compact = offers.map((o) => ({ id: o.id, brand: o.brand, title: o.title, category: o.category, priceBand: o.priceBand, offerType: o.offerType }));
+      const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intent, answers, offers: compact }), signal: ctrl.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        const d = await res.json();
+        if (Array.isArray(d?.offerIds)) {
+          const valid = d.offerIds.filter((id: string) => offers.some((o) => o.id === id)).slice(0, 10);
+          return { offerIds: valid, headline: d.headline || (valid.length ? `${valid.length} pépites pour toi` : '') };
+        }
+      }
+    } catch {
+      /* repli local */
+    }
+  }
+  return localCurate(intent, answers, offers);
+}
+
+export function localCurate(intent: string, answers: Record<string, string>, offers: Offer[]): CurateResult {
+  const { picks } = buildIntentPicks(intent, answers);
+  const cats = picks.filter((p) => p.startsWith('cat:')).map((p) => p.slice(4));
+  const words = `${intent} ${Object.values(answers).join(' ')}`.toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter((w) => w.length > 2);
+  const scored = offers.map((o) => {
+    let s = 0;
+    if (cats.length && cats.includes(o.category)) s += 3;
+    const text = `${o.brand} ${o.title} ${o.description ?? ''} ${o.category}`.toLowerCase();
+    for (const w of words) if (text.includes(w)) s += 1;
+    return { o, s };
+  }).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
+  const offerIds = scored.slice(0, 10).map((x) => x.o.id);
+  return { offerIds, headline: offerIds.length ? `${offerIds.length} pépites pour toi` : '' };
 }
