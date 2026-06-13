@@ -1,0 +1,45 @@
+# ── Secrets (NEVER commit) ────────────────────────────────
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+*.pem
+**/secrets.*
+
+# ── Node / JS ─────────────────────────────────────────────
+node_modules/
+npm-debug.*
+yarn-error.*
+.pnp.*
+
+# ── Expo ──────────────────────────────────────────────────
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+*.orig.*
+
+# ── Native ────────────────────────────────────────────────
+android/
+ios/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# ── Supabase (local stack) ────────────────────────────────
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# ── Build / OS / editor ───────────────────────────────────
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ── Design source archive (kept extracted in design-ref/) ──
+VCA.zip
