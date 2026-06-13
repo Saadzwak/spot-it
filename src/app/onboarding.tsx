@@ -60,7 +60,7 @@ export default function Onboarding() {
           <>
             <Text style={text.h1}>Ton rapport à la dépense</Text>
             <Text style={styles.sub}>Sans jugement — ça nous aide à viser juste.</Text>
-            {WALLET_ARCHETYPES.map((a) => <ArchCard key={a.id} a={a} on={wallet === a.id} onPress={() => setWallet(a.id)} />)}
+            {WALLET_ARCHETYPES.map((a) => <ArchCard key={a.id} a={a} on={wallet === a.id} onPress={() => { setWallet(a.id); setTimeout(() => setStep(2), 240); }} />)}
           </>
         )}
 
@@ -68,7 +68,7 @@ export default function Onboarding() {
           <>
             <Text style={text.h1}>Comment tu achètes ?</Text>
             <Text style={styles.sub}>Ton style de shopping, en une phrase.</Text>
-            {BUYING_STYLES.map((a) => <ArchCard key={a.id} a={a} on={style === a.id} onPress={() => setStyle(a.id)} />)}
+            {BUYING_STYLES.map((a) => <ArchCard key={a.id} a={a} on={style === a.id} onPress={() => { setStyle(a.id); setTimeout(() => setStep(3), 240); }} />)}
           </>
         )}
 
@@ -89,11 +89,9 @@ export default function Onboarding() {
 
       <View style={styles.footer}>
         {step > 0 ? <GhostButton label="Retour" onPress={() => setStep((s) => s - 1)} /> : <View style={{ flex: 1 }} />}
-        {step < 3 ? (
-          <PrimaryButton label={step === 0 ? 'Continuer' : 'Suivant'} onPress={() => setStep((s) => s + 1)} />
-        ) : (
-          <PrimaryButton label="Commencer" onPress={finish} icon={<Icon name="check" size={18} color="#fff" />} />
-        )}
+        {step === 0 ? <PrimaryButton label="Continuer" onPress={() => setStep(1)} /> : null}
+        {step === 3 ? <PrimaryButton label="Commencer" onPress={finish} icon={<Icon name="check" size={18} color="#fff" />} /> : null}
+        {step === 1 || step === 2 ? <Text style={styles.hint}>Touche une option pour continuer</Text> : null}
       </View>
     </Screen>
   );
@@ -139,4 +137,5 @@ const styles = StyleSheet.create({
   locSub: { ...text.body, textAlign: 'center', maxWidth: 300 },
   locToggle: { alignSelf: 'stretch', marginTop: 8, padding: 16, borderRadius: radius.card, backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 16 },
+  hint: { fontFamily: font.body, fontSize: 13, color: colors.ink3 },
 });

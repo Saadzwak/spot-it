@@ -1,5 +1,6 @@
-// useRealLocation — demande la position réelle (une fois) et ré-ancre les offres
-// autour. Corrige le bug "tout est à Paris" : la carte suit l'utilisateur.
+// useRealLocation — position réelle FIABLE (lastKnown instantané + position
+// précise avec timeout). Ré-ancre les offres autour de l'utilisateur, donc la
+// distance affichée correspond toujours à la vraie position (fix Lille/Paris).
 import { useEffect } from 'react';
 import * as Location from 'expo-location';
 import { useStore } from '@/store/useStore';
@@ -14,12 +15,19 @@ export function useRealLocation() {
     (async () => {
       const ok = await ensureLocationPermission();
       if (!ok || cancelled) return;
+      // 1) dernière position connue : instantané, ancre tout de suite
       try {
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        if (!cancelled) setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      } catch {
-        /* garde le centre par défaut */
-      }
+        const last = await Location.getLastKnownPositionAsync();
+        if (last && !cancelled) setUserLoc({ lat: last.coords.latitude, lng: last.coords.longitude });
+      } catch { /* ignore */ }
+      // 2) position précise, avec garde-fou de 8 s
+      try {
+        const cur = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<null>((res) => setTimeout(() => res(null), 8000)),
+        ]);
+        if (cur && !cancelled) setUserLoc({ lat: cur.coords.latitude, lng: cur.coords.longitude });
+      } catch { /* garde lastKnown ou défaut */ }
     })();
     return () => { cancelled = true; };
   }, [userLoc, setUserLoc]);
