@@ -1,174 +1,131 @@
 // ============================================================================
-// Ciblage — campaign form: audience, radius, dayparts, budget
-// No external dependencies — all built with View + Pressable.
+// Ciblage — campagne : audience (catégories + archétypes + tranches prix),
+// rayon, créneaux, budget (stepper), portée estimée, lancer / pause.
+// Tout en Views + Pressable. UI optimiste, écriture best-effort en réel.
 // ============================================================================
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  Pressable,
   StyleSheet,
   useWindowDimensions,
   Platform,
 } from 'react-native';
 import { colors, radius, shadows } from '@/design/tokens';
 import { font } from '@/design/theme';
-import { SectionTitle, PrimaryButton, CatChip } from '@/components';
+import { SectionTitle, PrimaryButton, GhostButton, CatChip } from '@/components';
+import { SelectPill, Stepper } from '@/merchant/components';
 import { hasSupabase } from '@/lib/env';
 import { getSupabase } from '@/lib/supabase';
 import { DEMO_STORE_ID } from '@/merchant/mock';
-import type { Category } from '@/types/contracts';
+import { WALLET_ARCHETYPES } from '@/data/onboarding';
+import type { Category, PriceBand } from '@/types/contracts';
 
-// ── preset data ──────────────────────────────────────────────────────────────
-
-const RADIUS_PRESETS: { label: string; value: number }[] = [
+const RADIUS_PRESETS = [
   { label: '400 m', value: 400 },
   { label: '800 m', value: 800 },
   { label: '1,5 km', value: 1500 },
 ];
 
-const DAYPART_PRESETS: { label: string; id: string }[] = [
-  { label: 'Matin',    id: 'matin'   },
-  { label: 'Midi',     id: 'midi'    },
-  { label: 'Soir',     id: 'soir'    },
-  { label: 'Weekend',  id: 'weekend' },
+const DAYPART_PRESETS = [
+  { label: 'Matin',   id: 'matin',   weight: 0.25 },
+  { label: 'Midi',    id: 'midi',    weight: 0.15 },
+  { label: 'Soir',    id: 'soir',    weight: 0.30 },
+  { label: 'Weekend', id: 'weekend', weight: 0.30 },
 ];
 
 const ALL_CATS: Category[] = ['mode', 'tech', 'maison', 'beaute'];
+const PRICE_BANDS: { id: PriceBand; label: string }[] = [
+  { id: '0-20', label: '0–20 €' }, { id: '20-50', label: '20–50 €' },
+  { id: '50-100', label: '50–100 €' }, { id: '100+', label: '100 € +' },
+];
 
-const BUDGET_STEP = 500; // cents — 5 €
-const BUDGET_MIN  = 500;
-const BUDGET_MAX  = 100_000; // 1000 €
+const BUDGET_STEP = 500, BUDGET_MIN = 500, BUDGET_MAX = 100_000;
 
-// ── SelectPill — active/inactive pressable pill ───────────────────────────────
-
-function SelectPill({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}): React.ReactElement {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.selPill, active && styles.selPillActive]}
-    >
-      <Text style={[styles.selPillLabel, active && styles.selPillLabelActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-// ── Stepper ───────────────────────────────────────────────────────────────────
-
-function Stepper({
-  value,
-  onDecrement,
-  onIncrement,
-  display,
-}: {
-  value: number;
-  onDecrement: () => void;
-  onIncrement: () => void;
-  display: string;
-}): React.ReactElement {
-  return (
-    <View style={styles.stepper}>
-      <Pressable onPress={onDecrement} style={styles.stepBtn} hitSlop={8}>
-        <Text style={styles.stepBtnLabel}>−</Text>
-      </Pressable>
-      <Text style={styles.stepValue}>{display}</Text>
-      <Pressable onPress={onIncrement} style={styles.stepBtn} hitSlop={8}>
-        <Text style={styles.stepBtnLabel}>+</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-// ── Main screen ───────────────────────────────────────────────────────────────
+// Pool d'audience estimé par catégorie (rayon 800 m de référence).
+const CAT_POOL: Record<Category, number> = { mode: 5200, tech: 3100, maison: 2400, beaute: 3800 };
+const RADIUS_FACTOR: Record<number, number> = { 400: 0.5, 800: 1, 1500: 1.9 };
 
 export default function Targeting(): React.ReactElement {
   const { width } = useWindowDimensions();
   const maxWidth = Math.min(width, 960);
   const centered: object = Platform.OS === 'web' ? { width: maxWidth, alignSelf: 'center' } : {};
 
-  // Form state
-  const [selectedCats, setSelectedCats]   = useState<Set<Category>>(new Set(['mode']));
-  const [radiusM, setRadiusM]             = useState<number>(800);
-  const [selectedDayparts, setDayparts]   = useState<Set<string>>(new Set(['matin', 'soir']));
-  const [budgetCents, setBudgetCents]     = useState<number>(5000); // 50 €
-  const [launched, setLaunched]           = useState(false);
-  const [launching, setLaunching]         = useState(false);
+  const [selectedCats, setSelectedCats] = useState<Set<Category>>(new Set(['mode']));
+  const [selectedArchs, setArchs]       = useState<Set<string>>(new Set(['malin']));
+  const [selectedBands, setBands]       = useState<Set<PriceBand>>(new Set(['50-100']));
+  const [radiusM, setRadiusM]           = useState(800);
+  const [selectedDayparts, setDayparts] = useState<Set<string>>(new Set(['matin', 'soir']));
+  const [budgetCents, setBudgetCents]   = useState(5000);
+  const [status, setStatus]             = useState<'draft' | 'active' | 'paused'>('draft');
+  const [working, setWorking]           = useState(false);
 
-  const toggleCat = (cat: Category) =>
-    setSelectedCats((prev) => {
+  const toggleSet = <T,>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, min = 0) =>
+    (v: T) => setter((prev) => {
       const next = new Set(prev);
-      if (next.has(cat)) { if (next.size > 1) next.delete(cat); }
-      else next.add(cat);
+      if (next.has(v)) { if (next.size > min) next.delete(v); } else next.add(v);
       return next;
     });
 
-  const toggleDaypart = (id: string) =>
-    setDayparts((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) { if (next.size > 1) next.delete(id); }
-      else next.add(id);
-      return next;
-    });
-
-  const decrementBudget = () =>
-    setBudgetCents((v) => Math.max(BUDGET_MIN, v - BUDGET_STEP));
-  const incrementBudget = () =>
-    setBudgetCents((v) => Math.min(BUDGET_MAX, v + BUDGET_STEP));
+  const toggleCat     = toggleSet(setSelectedCats, 1);
+  const toggleArch    = toggleSet(setArchs, 0);
+  const toggleBand    = toggleSet(setBands, 0);
+  const toggleDaypart = toggleSet(setDayparts, 1);
 
   const budgetDisplay = `${(budgetCents / 100).toFixed(0)} €`;
 
-  // Daypart → hours mapping (simplified)
+  // ── Portée estimée (déterministe) ──
+  const reach = useMemo(() => {
+    const pool = Array.from(selectedCats).reduce((s, c) => s + CAT_POOL[c], 0);
+    const rf = RADIUS_FACTOR[radiusM] ?? 1;
+    const dp = DAYPART_PRESETS
+      .filter((d) => selectedDayparts.has(d.id))
+      .reduce((s, d) => s + d.weight, 0) || 0.25;
+    const bandFactor = 0.6 + 0.1 * selectedBands.size; // plus de tranches → plus large
+    return Math.round((pool * rf * dp * bandFactor) / 100) * 100;
+  }, [selectedCats, radiusM, selectedDayparts, selectedBands]);
+
   const daypartHours: Record<string, [number, number]> = {
     matin: [8, 12], midi: [12, 14], soir: [18, 22], weekend: [10, 20],
   };
 
-  const handleLaunch = async () => {
-    if (launching) return;
-    setLaunching(true);
-
-    if (hasSupabase()) {
-      const supabase = getSupabase();
-      if (supabase) {
-        try {
-          const daypartArr = Array.from(selectedDayparts);
-          const hours = daypartArr.reduce<[number, number]>(
-            (acc, id) => {
-              const h = daypartHours[id] ?? [9, 18];
-              return [Math.min(acc[0], h[0]), Math.max(acc[1], h[1])];
-            },
-            [23, 0],
-          );
-
-          await supabase.from('campaigns').insert({
-            store_id:     DEMO_STORE_ID,
-            audience:     { categories: Array.from(selectedCats) },
-            radius_m:     radiusM,
-            daypart:      { days: daypartArr, hours },
-            budget_cents: budgetCents,
-            spend_cents:  0,
-            status:       'active',
-          });
-        } catch {
-          // Ignore — show success anyway for demo
-        }
-      }
-    }
-
-    setLaunching(false);
-    setLaunched(true);
+  const persist = async (newStatus: 'active' | 'paused') => {
+    if (!hasSupabase()) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const days = Array.from(selectedDayparts);
+      const hours = days.reduce<[number, number]>(
+        (acc, id) => { const h = daypartHours[id] ?? [9, 18]; return [Math.min(acc[0], h[0]), Math.max(acc[1], h[1])]; },
+        [23, 0],
+      );
+      await supabase.from('campaigns').insert({
+        store_id: DEMO_STORE_ID,
+        audience: {
+          categories: Array.from(selectedCats),
+          archetypes: Array.from(selectedArchs),
+          price_bands: Array.from(selectedBands),
+        },
+        radius_m: radiusM,
+        daypart: { days, hours },
+        budget_cents: budgetCents,
+        spend_cents: 0,
+        status: newStatus,
+      });
+    } catch { /* optimiste */ }
   };
+
+  const handleLaunch = async () => {
+    if (working) return;
+    setWorking(true);
+    setStatus('active');           // optimiste
+    await persist('active');
+    setWorking(false);
+  };
+  const handlePause  = () => setStatus('paused');
+  const handleResume = () => setStatus('active');
 
   return (
     <ScrollView
@@ -177,116 +134,101 @@ export default function Targeting(): React.ReactElement {
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      <SectionTitle style={styles.topGap}>Nouvelle campagne</SectionTitle>
+      <Text style={styles.h1}>Campagne</Text>
 
-      {/* ── Audience ─────────────────────────────────────────────────────── */}
+      {/* ── Audience : catégories ──────────────────────────────────────────── */}
       <View style={styles.section}>
         <Text style={styles.fieldLabel}>Audience — catégories</Text>
         <View style={styles.chipRow}>
           {ALL_CATS.map((cat) => (
-            <CatChip
-              key={cat}
-              catId={cat}
-              active={selectedCats.has(cat)}
-              onPress={() => toggleCat(cat)}
-            />
+            <CatChip key={cat} catId={cat} active={selectedCats.has(cat)} onPress={() => toggleCat(cat)} />
           ))}
         </View>
       </View>
 
-      {/* ── Rayon ────────────────────────────────────────────────────────── */}
+      {/* ── Audience : archétypes ──────────────────────────────────────────── */}
+      <View style={styles.section}>
+        <Text style={styles.fieldLabel}>Archétypes d’acheteur</Text>
+        <View style={styles.pillRow}>
+          {WALLET_ARCHETYPES.map((a) => (
+            <SelectPill key={a.id} label={`${a.emoji} ${a.label}`} active={selectedArchs.has(a.id)} onPress={() => toggleArch(a.id)} />
+          ))}
+        </View>
+      </View>
+
+      {/* ── Audience : tranches de prix ────────────────────────────────────── */}
+      <View style={styles.section}>
+        <Text style={styles.fieldLabel}>Tranches de prix</Text>
+        <View style={styles.pillRow}>
+          {PRICE_BANDS.map((p) => (
+            <SelectPill key={p.id} label={p.label} active={selectedBands.has(p.id)} onPress={() => toggleBand(p.id)} />
+          ))}
+        </View>
+      </View>
+
+      {/* ── Rayon ──────────────────────────────────────────────────────────── */}
       <View style={styles.section}>
         <Text style={styles.fieldLabel}>Rayon de diffusion</Text>
         <View style={styles.pillRow}>
           {RADIUS_PRESETS.map((p) => (
-            <SelectPill
-              key={p.value}
-              label={p.label}
-              active={radiusM === p.value}
-              onPress={() => setRadiusM(p.value)}
-            />
+            <SelectPill key={p.value} label={p.label} active={radiusM === p.value} onPress={() => setRadiusM(p.value)} />
           ))}
         </View>
       </View>
 
-      {/* ── Créneaux ─────────────────────────────────────────────────────── */}
+      {/* ── Créneaux ───────────────────────────────────────────────────────── */}
       <View style={styles.section}>
         <Text style={styles.fieldLabel}>Créneaux horaires</Text>
         <View style={styles.pillRow}>
           {DAYPART_PRESETS.map((d) => (
-            <SelectPill
-              key={d.id}
-              label={d.label}
-              active={selectedDayparts.has(d.id)}
-              onPress={() => toggleDaypart(d.id)}
-            />
+            <SelectPill key={d.id} label={d.label} active={selectedDayparts.has(d.id)} onPress={() => toggleDaypart(d.id)} />
           ))}
         </View>
       </View>
 
-      {/* ── Budget ───────────────────────────────────────────────────────── */}
+      {/* ── Budget ─────────────────────────────────────────────────────────── */}
       <View style={styles.section}>
-        <Text style={styles.fieldLabel}>Budget</Text>
+        <Text style={styles.fieldLabel}>Budget hebdomadaire</Text>
         <Stepper
-          value={budgetCents}
-          onDecrement={decrementBudget}
-          onIncrement={incrementBudget}
           display={budgetDisplay}
+          onDecrement={() => setBudgetCents((v) => Math.max(BUDGET_MIN, v - BUDGET_STEP))}
+          onIncrement={() => setBudgetCents((v) => Math.min(BUDGET_MAX, v + BUDGET_STEP))}
         />
       </View>
 
-      {/* ── Summary card ─────────────────────────────────────────────────── */}
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Récapitulatif</Text>
-        <Text style={styles.summaryLine}>
-          Catégories : {Array.from(selectedCats).join(', ')}
-        </Text>
-        <Text style={styles.summaryLine}>
-          Rayon : {RADIUS_PRESETS.find((p) => p.value === radiusM)?.label ?? `${radiusM} m`}
-        </Text>
-        <Text style={styles.summaryLine}>
-          Créneaux : {Array.from(selectedDayparts).join(', ')}
-        </Text>
-        <Text style={styles.summaryLine}>Budget : {budgetDisplay}</Text>
+      {/* ── Portée estimée ─────────────────────────────────────────────────── */}
+      <View style={styles.reachCard}>
+        <Text style={styles.reachLabel}>Portée estimée</Text>
+        <Text style={styles.reachValue}>~{reach.toLocaleString('fr-FR')} personnes</Text>
+        <Text style={styles.reachSub}>par semaine, dans votre zone et vos créneaux</Text>
       </View>
 
-      {/* ── Success state ────────────────────────────────────────────────── */}
-      {launched && (
-        <View style={styles.successBanner}>
-          <Text style={styles.successText}>
-            Campagne lancée avec succès !
+      {/* ── État + actions ─────────────────────────────────────────────────── */}
+      {status !== 'draft' && (
+        <View style={[styles.statusBanner, status === 'paused' && styles.statusPaused]}>
+          <View style={[styles.statusDot, { backgroundColor: status === 'active' ? '#1FA463' : colors.ink3 }]} />
+          <Text style={styles.statusText}>
+            {status === 'active' ? 'Campagne active' : 'Campagne en pause'}
           </Text>
-          <Text style={styles.successSub}>
-            {hasSupabase() ? 'Créée en base.' : 'Mode démo — aucune donnée envoyée.'}
+          <Text style={styles.statusSub}>
+            {hasSupabase() ? 'Synchronisée en base.' : 'Mode démo.'}
           </Text>
         </View>
       )}
 
-      {/* ── CTA ──────────────────────────────────────────────────────────── */}
-      {!launched && (
-        <View style={styles.ctaRow}>
+      <View style={styles.ctaRow}>
+        {status === 'active' ? (
+          <GhostButton label="Mettre en pause" onPress={handlePause} />
+        ) : status === 'paused' ? (
+          <PrimaryButton label="Reprendre" onPress={handleResume} />
+        ) : (
           <PrimaryButton
-            label={launching ? 'Lancement…' : 'Lancer la campagne'}
+            label={working ? 'Lancement…' : 'Lancer la campagne'}
             onPress={handleLaunch}
-            disabled={launching}
+            disabled={working}
           />
-        </View>
-      )}
-
-      {launched && (
-        <View style={styles.ctaRow}>
-          <PrimaryButton
-            label="Nouvelle campagne"
-            onPress={() => {
-              setLaunched(false);
-              setSelectedCats(new Set(['mode']));
-              setRadiusM(800);
-              setDayparts(new Set(['matin', 'soir']));
-              setBudgetCents(5000);
-            }}
-          />
-        </View>
-      )}
+        )}
+      </View>
 
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -294,21 +236,17 @@ export default function Targeting(): React.ReactElement {
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: colors.canvas,
-  },
-  content: {
-    padding: 16,
-    paddingTop: 20,
-  },
-  topGap: {
+  scroll: { flex: 1, backgroundColor: colors.canvas },
+  content: { padding: 16, paddingTop: 20 },
+  h1: {
+    fontFamily: font.displayBold,
+    fontSize: 30,
+    fontWeight: '700',
+    letterSpacing: -0.7,
+    color: colors.ink,
     marginBottom: 20,
   },
-  // ── sections ──
-  section: {
-    marginBottom: 24,
-  },
+  section: { marginBottom: 24 },
   fieldLabel: {
     fontFamily: font.bodySemiBold,
     fontSize: 13,
@@ -318,117 +256,44 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 10,
   },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  // ── SelectPill ──
-  selPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.line,
-    ...shadows.sm,
-  },
-  selPillActive: {
-    backgroundColor: colors.ink,
-    borderColor: colors.ink,
-  },
-  selPillLabel: {
-    fontFamily: font.bodySemiBold,
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.ink2,
-  },
-  selPillLabelActive: {
-    color: colors.white,
-  },
-  // ── Stepper ──
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: colors.surface,
-    borderRadius: radius.pill,
-    borderWidth: 1.5,
-    borderColor: colors.line,
-    overflow: 'hidden',
-    ...shadows.sm,
-  },
-  stepBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBtnLabel: {
-    fontFamily: font.bodyBold,
-    fontSize: 20,
-    color: colors.ink,
-    lineHeight: 24,
-  },
-  stepValue: {
-    fontFamily: font.bodySemiBold,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.ink,
-    minWidth: 72,
-    textAlign: 'center',
-    paddingHorizontal: 8,
-  },
-  // ── Summary ──
-  summaryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    padding: 16,
-    marginBottom: 20,
-    gap: 4,
-    ...shadows.sm,
-  },
-  summaryTitle: {
-    fontFamily: font.bodySemiBold,
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.ink,
-    marginBottom: 6,
-  },
-  summaryLine: {
-    fontFamily: font.body,
-    fontSize: 13,
-    color: colors.ink2,
-    lineHeight: 20,
-  },
-  // ── Success ──
-  successBanner: {
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  reachCard: {
     backgroundColor: colors.accentSoft,
     borderRadius: radius.card,
-    padding: 16,
-    marginBottom: 16,
-    gap: 4,
+    padding: 18,
+    marginBottom: 20,
   },
-  successText: {
+  reachLabel: {
     fontFamily: font.bodySemiBold,
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.accentInk,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
-  successSub: {
-    fontFamily: font.body,
-    fontSize: 13,
+  reachValue: {
+    fontFamily: font.displayBold,
+    fontSize: 30,
+    fontWeight: '700',
+    letterSpacing: -0.7,
     color: colors.accentInk,
-    opacity: 0.8,
-  },
-  // ── CTA ──
-  ctaRow: {
     marginTop: 4,
-    marginBottom: 8,
   },
+  reachSub: { fontFamily: font.body, fontSize: 13, color: colors.accentInk, opacity: 0.8, marginTop: 2 },
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    padding: 14,
+    marginBottom: 16,
+    ...shadows.sm,
+  },
+  statusPaused: { opacity: 0.9 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontFamily: font.bodySemiBold, fontSize: 14, fontWeight: '600', color: colors.ink },
+  statusSub: { fontFamily: font.body, fontSize: 12, color: colors.ink3, marginLeft: 'auto' },
+  ctaRow: { marginTop: 4 },
 });

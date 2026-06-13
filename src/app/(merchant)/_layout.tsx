@@ -12,14 +12,16 @@ import {
   useWindowDimensions,
   Platform,
 } from 'react-native';
-import { Stack, usePathname, router } from 'expo-router';
+import { Stack, usePathname, router, Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows } from '@/design/tokens';
 import { font } from '@/design/theme';
 import { hasSupabase } from '@/lib/env';
+import { useMerchantSession } from '@/merchant/useMerchantData';
 
 const NAV_ITEMS = [
   { label: 'Dashboard',  href: '/(merchant)/dashboard'  },
+  { label: 'Audience',   href: '/(merchant)/audience'   },
   { label: 'Catalogue',  href: '/(merchant)/catalog'    },
   { label: 'Ciblage',    href: '/(merchant)/targeting'  },
 ] as const;
@@ -28,16 +30,38 @@ export default function MerchantLayout() {
   const pathname = usePathname();
   const { width } = useWindowDimensions();
   const isLive = hasSupabase();
+  const { session, loading: sessionLoading, live } = useMerchantSession();
 
-  // Determine active tab: pathname in this group can be /dashboard, /catalog, /targeting
-  const activeTab = NAV_ITEMS.findIndex(
-    (item) => pathname === item.href.replace('/(merchant)', '') || pathname === item.href,
-  );
+  const isLogin = pathname.endsWith('/login');
+
+  // Gating réel : pas de session → écran de connexion. En démo, session pré-remplie.
+  if (live && !sessionLoading && !session && !isLogin) {
+    return <Redirect href="/(merchant)/login" />;
+  }
 
   const maxWidth = Math.min(width, 960);
   const centered: object = Platform.OS === 'web'
     ? { width: maxWidth, alignSelf: 'center' }
     : { flex: 1 };
+
+  const stack = (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.canvas },
+        animation: 'fade',
+      }}
+    />
+  );
+
+  // L'écran de login s'affiche sans chrome (header + nav).
+  if (isLogin) {
+    return <View style={styles.root}>{stack}</View>;
+  }
+
+  const activeTab = NAV_ITEMS.findIndex(
+    (item) => pathname === item.href.replace('/(merchant)', '') || pathname === item.href,
+  );
 
   return (
     <SafeAreaView style={styles.root}>
@@ -74,15 +98,7 @@ export default function MerchantLayout() {
       </View>
 
       {/* ── Content via nested Stack ───────────────────────────────────────── */}
-      <View style={styles.content}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.canvas },
-            animation: 'fade',
-          }}
-        />
-      </View>
+      <View style={styles.content}>{stack}</View>
     </SafeAreaView>
   );
 }

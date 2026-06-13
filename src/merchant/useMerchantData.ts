@@ -1,19 +1,24 @@
 // ============================================================================
 // Spot.it merchant — data hooks
-// Each hook degrades gracefully: live path when hasSupabase(), mock otherwise.
-// Never throws — catches all errors, falls back to mock data.
+// Chaque hook dégrade proprement : voie live si hasSupabase(), mock sinon.
+// Ne jette jamais — toutes les erreurs retombent sur le mock. UI optimiste.
 // ============================================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { hasSupabase } from '@/lib/env';
 import { getSupabase } from '@/lib/supabase';
 import type { StoreKpis, OfferStat, Offer } from '@/types/contracts';
 import {
-  MOCK_STORE_KPIS,
   MOCK_OFFER_STATS,
   MOCK_MERCHANT_OFFERS,
+  MOCK_KPIS_BY_PERIOD,
+  MOCK_ARCHETYPE_SHARES,
   DEMO_STORE_ID,
+  type Period,
 } from './mock';
+import { audienceByCategory, audienceByPriceBand, type Slice } from './insights';
+import { categories } from '@/design/tokens';
+import type { OfferDraft } from './components/OfferCardPreview';
 import { OFFERS } from '@/data/offers.seed';
 
 // ── snake_case → camelCase mappers (Postgres rows are snake_case) ─────────────
@@ -58,174 +63,112 @@ function mapOfferStatRow(row: OfferStatRow): OfferStat {
   };
 }
 
-// ── useStoreKpis ─────────────────────────────────────────────────────────────
-// Returns current KPIs for the demo store.
-// Live: selects store_kpis + subscribes to realtime UPDATE.
-// Mock: returns MOCK_STORE_KPIS, no subscription.
+// ── useStoreKpis(period) ──────────────────────────────────────────────────────
+// Renvoie les KPIs courants + la période précédente (→ variation) + statut live.
+// Live: SELECT store_kpis + abonnement realtime UPDATE (prev non dispo → null).
+// Mock: MOCK_KPIS_BY_PERIOD[period] (courant + précédent).
 
-export function useStoreKpis(): { kpis: StoreKpis | null; loading: boolean; live: boolean } {
-  const [kpis, setKpis] = useState<StoreKpis | null>(null);
-  const [loading, setLoading] = useState(true);
+export function useStoreKpis(period: Period = '7j'): {
+  kpis: StoreKpis | null;
+  prev: StoreKpis | null;
+  loading: boolean;
+  live: boolean;
+} {
   const live = hasSupabase();
+  const [kpis, setKpis] = useState<StoreKpis | null>(null);
+  const [prev, setPrev] = useState<StoreKpis | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!live) {
-      setKpis(MOCK_STORE_KPIS);
+    const fallback = () => {
+      setKpis(MOCK_KPIS_BY_PERIOD[period].current);
+      setPrev(MOCK_KPIS_BY_PERIOD[period].previous);
       setLoading(false);
-      return;
-    }
+    };
 
+    if (!live) { fallback(); return; }
     const supabase = getSupabase();
-    if (!supabase) {
-      setKpis(MOCK_STORE_KPIS);
-      setLoading(false);
-      return;
-    }
+    if (!supabase) { fallback(); return; }
 
     let mounted = true;
+    setPrev(null); // pas d'historique fiable en live → variation masquée
 
-    // Initial fetch
-    const fetchKpis = async () => {
+    (async () => {
       try {
         const { data, error } = await supabase
           .from('store_kpis')
           .select('store_id,impressions,clicks,visits,conversions,spend_cents,revenue_cents,updated_at')
           .eq('store_id', DEMO_STORE_ID)
           .single();
-        if (mounted) {
-          if (error || !data) {
-            setKpis(MOCK_STORE_KPIS);
-          } else {
-            setKpis(mapStoreKpisRow(data as StoreKpisRow));
-          }
-          setLoading(false);
-        }
+        if (!mounted) return;
+        if (error || !data) setKpis(MOCK_KPIS_BY_PERIOD[period].current);
+        else setKpis(mapStoreKpisRow(data as StoreKpisRow));
+        setLoading(false);
       } catch {
-        if (mounted) {
-          setKpis(MOCK_STORE_KPIS);
-          setLoading(false);
-        }
+        if (mounted) fallback();
       }
-    };
+    })();
 
-    fetchKpis();
-
-    // Realtime subscription for UPDATE events
     const channel = supabase
       .channel('store_kpis_realtime')
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'store_kpis',
-          filter: `store_id=eq.${DEMO_STORE_ID}`,
-        },
+        { event: 'UPDATE', schema: 'public', table: 'store_kpis', filter: `store_id=eq.${DEMO_STORE_ID}` },
         (payload) => {
           if (mounted && payload.new) {
-            try {
-              setKpis(mapStoreKpisRow(payload.new as StoreKpisRow));
-            } catch {
-              // Ignore malformed payload
-            }
+            try { setKpis(mapStoreKpisRow(payload.new as StoreKpisRow)); } catch { /* ignore */ }
           }
         },
       )
       .subscribe();
 
-    return () => {
-      mounted = false;
-      supabase.removeChannel(channel);
-    };
-  }, [live]);
+    return () => { mounted = false; supabase.removeChannel(channel); };
+  }, [live, period]);
 
-  return { kpis, loading, live };
+  return { kpis, prev, loading, live };
 }
 
 // ── useOfferStats ─────────────────────────────────────────────────────────────
-// Returns OfferStat[] for the demo store.
-// Live: calls merchant_offer_stats(store_id) RPC.
-// Mock: returns MOCK_OFFER_STATS.
 
 export function useOfferStats(): { stats: OfferStat[]; loading: boolean } {
   const [stats, setStats] = useState<OfferStat[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!hasSupabase()) {
-      setStats(MOCK_OFFER_STATS);
-      setLoading(false);
-      return;
-    }
-
-    const supabase = getSupabase();
-    if (!supabase) {
-      setStats(MOCK_OFFER_STATS);
-      setLoading(false);
-      return;
-    }
+    const supabase = hasSupabase() ? getSupabase() : null;
+    if (!supabase) { setStats(MOCK_OFFER_STATS); setLoading(false); return; }
 
     let mounted = true;
-
-    const fetchStats = async () => {
+    (async () => {
       try {
-        const { data, error } = await supabase.rpc('merchant_offer_stats', {
-          p_store_id: DEMO_STORE_ID,
-        });
-        if (mounted) {
-          if (error || !data || (Array.isArray(data) && data.length === 0)) {
-            setStats(MOCK_OFFER_STATS);
-          } else {
-            setStats((data as OfferStatRow[]).map(mapOfferStatRow));
-          }
-          setLoading(false);
-        }
+        const { data, error } = await supabase.rpc('merchant_offer_stats', { p_store_id: DEMO_STORE_ID });
+        if (!mounted) return;
+        if (error || !data || (Array.isArray(data) && data.length === 0)) setStats(MOCK_OFFER_STATS);
+        else setStats((data as OfferStatRow[]).map(mapOfferStatRow));
+        setLoading(false);
       } catch {
-        if (mounted) {
-          setStats(MOCK_OFFER_STATS);
-          setLoading(false);
-        }
+        if (mounted) { setStats(MOCK_OFFER_STATS); setLoading(false); }
       }
-    };
-
-    fetchStats();
-
-    return () => {
-      mounted = false;
-    };
+    })();
+    return () => { mounted = false; };
   }, []);
 
   return { stats, loading };
 }
 
 // ── useMerchantOffers ─────────────────────────────────────────────────────────
-// Returns the Offer[] belonging to the demo merchant.
-// Live: queries offers joined through stores owned by DEMO_MERCHANT_ID.
-// Mock: returns the full seed catalog (all offers belong to demo merchant in seed).
 
 export function useMerchantOffers(): { offers: Offer[]; loading: boolean } {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!hasSupabase()) {
-      setOffers(MOCK_MERCHANT_OFFERS);
-      setLoading(false);
-      return;
-    }
-
-    const supabase = getSupabase();
-    if (!supabase) {
-      setOffers(MOCK_MERCHANT_OFFERS);
-      setLoading(false);
-      return;
-    }
+    const supabase = hasSupabase() ? getSupabase() : null;
+    if (!supabase) { setOffers(MOCK_MERCHANT_OFFERS); setLoading(false); return; }
 
     let mounted = true;
-
-    const fetchOffers = async () => {
+    (async () => {
       try {
-        // Join offers → stores → check merchant ownership via store's merchant_id
         const { data, error } = await supabase
           .from('offers')
           .select(`
@@ -235,61 +178,151 @@ export function useMerchantOffers(): { offers: Offer[]; loading: boolean } {
             stores!inner(merchant_id)
           `)
           .eq('stores.merchant_id', 'b0000000-0000-0000-0000-000000000001');
-
-        if (mounted) {
-          if (error || !data || data.length === 0) {
-            setOffers(MOCK_MERCHANT_OFFERS);
-          } else {
-            // Map DB rows to Offer shape
-            const mapped: Offer[] = (data as Array<Record<string, unknown>>).map((row) => ({
-              id:           String(row.id),
-              brand:        String(row.brand),
-              title:        String(row.title),
-              teaser:       row.teaser ? String(row.teaser) : undefined,
-              category:     row.category as Offer['category'],
-              priceBand:    String(row.price_band) as Offer['priceBand'],
-              offerType:    String(row.offer_type) as Offer['offerType'],
-              sponsored:    Boolean(row.sponsored),
-              grad:         (row.grad as [string, string]) ?? ['#17130F', '#5C544C'],
-              ink:          String(row.ink ?? '#FFFFFF'),
-              wordmark:     (row.wordmark as Offer['wordmark']) ?? {},
-              description:  row.description ? String(row.description) : undefined,
-              whyTemplate:  row.why_template ? String(row.why_template) : undefined,
-            }));
-            setOffers(mapped);
-          }
-          setLoading(false);
-        }
-      } catch {
-        if (mounted) {
+        if (!mounted) return;
+        if (error || !data || data.length === 0) {
           setOffers(MOCK_MERCHANT_OFFERS);
-          setLoading(false);
+        } else {
+          const mapped: Offer[] = (data as Array<Record<string, unknown>>).map((row) => ({
+            id:           String(row.id),
+            brand:        String(row.brand),
+            title:        String(row.title),
+            teaser:       row.teaser ? String(row.teaser) : undefined,
+            category:     row.category as Offer['category'],
+            priceBand:    String(row.price_band) as Offer['priceBand'],
+            offerType:    String(row.offer_type) as Offer['offerType'],
+            sponsored:    Boolean(row.sponsored),
+            grad:         (row.grad as [string, string]) ?? ['#17130F', '#5C544C'],
+            ink:          String(row.ink ?? '#FFFFFF'),
+            wordmark:     (row.wordmark as Offer['wordmark']) ?? {},
+            description:  row.description ? String(row.description) : undefined,
+            whyTemplate:  row.why_template ? String(row.why_template) : undefined,
+          }));
+          setOffers(mapped);
         }
+        setLoading(false);
+      } catch {
+        if (mounted) { setOffers(MOCK_MERCHANT_OFFERS); setLoading(false); }
       }
-    };
-
-    fetchOffers();
-
-    return () => {
-      mounted = false;
-    };
+    })();
+    return () => { mounted = false; };
   }, []);
 
   return { offers, loading };
 }
 
 // ── useOfferLookup ────────────────────────────────────────────────────────────
-// Builds a lookup map from offerId → Offer for joining stats with display data.
 export function useOfferLookup(): Map<string, Offer> {
   const { offers } = useMerchantOffers();
-  // In mock mode: also index by slug id (the seed uses string slugs, not UUIDs)
-  const map = new Map<string, Offer>();
-  for (const o of offers) {
-    map.set(o.id, o);
-  }
-  // Also index by slug for mock OfferStat ids
-  for (const o of OFFERS) {
-    if (!map.has(o.id)) map.set(o.id, o);
-  }
-  return map;
+  return useMemo(() => {
+    const map = new Map<string, Offer>();
+    for (const o of offers) map.set(o.id, o);
+    for (const o of OFFERS) if (!map.has(o.id)) map.set(o.id, o);
+    return map;
+  }, [offers]);
+}
+
+// ── useAudienceInsights ────────────────────────────────────────────────────────
+// Agrégats RGPD-safe : top offres, répartition catégorie / tranche prix / archétype.
+export function useAudienceInsights(): {
+  topOffers: { stat: OfferStat; offer: Offer }[];
+  byCategory: Slice[];
+  byPriceBand: Slice[];
+  archetypes: { id: string; label: string; emoji: string; pct: number }[];
+  loading: boolean;
+} {
+  const { stats, loading: ls } = useOfferStats();
+  const lookup = useOfferLookup();
+
+  return useMemo(() => {
+    const topOffers = [...stats]
+      .sort((a, b) => b.acceptRate - a.acceptRate)
+      .map((stat) => ({ stat, offer: lookup.get(stat.offerId) }))
+      .filter((x): x is { stat: OfferStat; offer: Offer } => Boolean(x.offer))
+      .slice(0, 6);
+
+    const byCategory = audienceByCategory(stats, lookup).map((s) => ({
+      ...s,
+      color: categories[s.id as keyof typeof categories]?.hue,
+    }));
+    const byPriceBand = audienceByPriceBand(stats, lookup);
+
+    return { topOffers, byCategory, byPriceBand, archetypes: MOCK_ARCHETYPE_SHARES, loading: ls };
+  }, [stats, lookup, ls]);
+}
+
+// ── Persistance offre (best-effort en live, optimiste côté UI) ─────────────────
+// Renvoie l'id (existant ou nouveau slug temporaire). N'échoue jamais.
+export async function saveOfferRemote(draft: OfferDraft, id?: string): Promise<void> {
+  const supabase = hasSupabase() ? getSupabase() : null;
+  if (!supabase) return;
+  try {
+    const payload = {
+      brand: draft.brand,
+      title: draft.title,
+      category: draft.category,
+      price_band: draft.priceBand,
+      offer_type: draft.offerType,
+      sponsored: draft.sponsored,
+      image: draft.image ?? null,
+    };
+    if (id) await supabase.from('offers').update(payload).eq('id', id);
+    else await supabase.from('offers').insert({ ...payload, store_id: DEMO_STORE_ID });
+  } catch { /* optimiste : on ignore l'échec réseau */ }
+}
+
+export async function setOfferActiveRemote(id: string, active: boolean): Promise<void> {
+  const supabase = hasSupabase() ? getSupabase() : null;
+  if (!supabase) return;
+  try { await supabase.from('offers').update({ is_active: active }).eq('id', id); }
+  catch { /* ignore */ }
+}
+
+// ── useMerchantSession ─────────────────────────────────────────────────────────
+// Démo : session synthétique pré-remplie. Live : auth Supabase email/mot de passe.
+export interface MerchantSession { email: string; demo: boolean }
+
+export function useMerchantSession(): {
+  session: MerchantSession | null;
+  loading: boolean;
+  live: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signOut: () => Promise<void>;
+} {
+  const live = hasSupabase();
+  const [session, setSession] = useState<MerchantSession | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!live) { setSession({ email: 'merchant@demo.spotit', demo: true }); setLoading(false); return; }
+    const supabase = getSupabase();
+    if (!supabase) { setSession({ email: 'merchant@demo.spotit', demo: true }); setLoading(false); return; }
+
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      const email = data.session?.user?.email;
+      setSession(email ? { email, demo: false } : null);
+      setLoading(false);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      if (!mounted) return;
+      const email = s?.user?.email;
+      setSession(email ? { email, demo: false } : null);
+    });
+    return () => { mounted = false; sub.subscription.unsubscribe(); };
+  }, [live]);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: 'Backend indisponible' };
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error ? error.message : null };
+  }, []);
+
+  const signOut = useCallback(async () => {
+    const supabase = getSupabase();
+    if (supabase) { try { await supabase.auth.signOut(); } catch { /* ignore */ } }
+  }, []);
+
+  return { session, loading, live, signIn, signOut };
 }
