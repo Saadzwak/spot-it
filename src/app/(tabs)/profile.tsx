@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Screen, SpotLogo, SectionTitle, Toggle, GhostButton, Card } from '@/components';
+import { Screen, SpotLogo, SectionTitle, Toggle, GhostButton, Card, Icon } from '@/components';
 import { colors, font, text, radius, shadows, categories } from '@/design/theme';
 import { useStore } from '@/store/useStore';
 
@@ -83,6 +83,11 @@ export default function ProfileScreen() {
       </Card>
 
       <View style={{ marginTop: 24, gap: 10 }}>
+        <GhostButton
+          label="Espace magasin (démo)"
+          icon={<Icon name="sliders" size={18} color={colors.ink} />}
+          onPress={() => router.push('/(merchant)/dashboard')}
+        />
         <GhostButton label="Réinitialiser mon profil" onPress={onReset} />
         <Text style={styles.note}>RGPD : tes données restent sur l’appareil en mode démo. Le partage est désactivé par défaut.</Text>
       </View>

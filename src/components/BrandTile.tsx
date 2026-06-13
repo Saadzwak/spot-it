@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   circleMotifWrap: {
-    ...StyleSheet.absoluteFill,
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     overflow: 'hidden',
   },
   wordmarkWrap: {
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   // RN cannot render SVG filter noise or use mixBlendMode:overlay on a View,
   // so we approximate with low-opacity white overlay for the film feel.
   grain: {
-    ...StyleSheet.absoluteFill,
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(255,255,255,0.03)',
     opacity: 0.5,
   },
