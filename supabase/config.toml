@@ -1,0 +1,101 @@
+# ============================================================================
+# Spot.it — Supabase local dev config
+# Run:  npx supabase start
+#       npx supabase db reset      (applies migrations/ + seed.sql)
+#       npx supabase functions serve
+# ============================================================================
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[api.tls]
+enabled = false
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+openai_api_key = ""
+
+[inbucket]
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+# NOTE: for the recommend Edge Function demo, log in as the seeded consumer:
+#   email: consumer@demo.spotit
+#   password: demo1234
+#   then pass Authorization: Bearer <jwt> to functions/recommend
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["https://127.0.0.1:3000"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+minimum_password_length = 6
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = false
+enable_confirmations = false
+
+# ── JWT hook (custom_access_token_hook) ─────────────────────────────────────
+# CAVEAT: Requires Dashboard enablement: Authentication > Hooks > Customize Access Token.
+# The function is defined in 0002_rls.sql but the hook wiring must be done once
+# via the Supabase Dashboard or CLI after `supabase start`.  The demo works
+# WITHOUT the hook because RLS policies use m.user_id = auth.uid() subqueries,
+# not the JWT app_metadata.role claim.  Enable the hook for production.
+#
+# Uncomment to enable locally (supabase CLI >= 1.165):
+# [auth.hook.custom_access_token]
+# enabled = true
+# uri = "pg-functions://postgres/public/custom_access_token_hook"
+# secrets = ""
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+inspector_port = 8083
+
+[functions.recommend]
+verify_jwt = true
+
+[functions.profil]
+verify_jwt = true
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[analytics]
+enabled = false
+
+[experimental]
+orioledb_version = ""
+s3_host = ""
+s3_region = ""
+s3_access_key = ""
+s3_secret_key = ""
