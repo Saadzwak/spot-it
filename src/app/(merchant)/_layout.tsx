@@ -18,6 +18,7 @@ import { colors, radius, shadows } from '@/design/tokens';
 import { font } from '@/design/theme';
 import { hasSupabase } from '@/lib/env';
 import { useMerchantSession } from '@/merchant/useMerchantData';
+import { Icon } from '@/components';
 
 const NAV_ITEMS = [
   { label: 'Dashboard',  href: '/(merchant)/dashboard'  },
@@ -68,7 +69,20 @@ export default function MerchantLayout() {
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={[styles.headerInner, centered]}>
-          <Text style={styles.brand}>Espace magasin</Text>
+          <View style={styles.headerLeft}>
+            <Pressable
+              onPress={() => {
+                if (router.canGoBack()) router.back();
+                else router.replace('/(tabs)/profile');
+              }}
+              hitSlop={10}
+              style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+              accessibilityLabel="Retour à l’application"
+            >
+              <Icon name="chevronLeft" size={20} color={colors.ink} />
+            </Pressable>
+            <Text style={styles.brand}>Espace magasin</Text>
+          </View>
           {/* Live / Démo indicator */}
           <View style={styles.badge}>
             <View style={[styles.badgeDot, { backgroundColor: isLive ? '#34C759' : colors.ink3 }]} />
@@ -119,6 +133,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 14,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  backBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -6,
+    backgroundColor: colors.canvas,
+  },
+  backBtnPressed: {
+    opacity: 0.6,
   },
   brand: {
     fontFamily: font.displaySemiBold,
