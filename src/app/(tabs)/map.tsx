@@ -1,14 +1,19 @@
+import { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Screen, SpotLogo, Icon } from '@/components';
 import { colors, font, shadows, radius } from '@/design/theme';
 import { useStore } from '@/store/useStore';
+import { rankOffers } from '@/learning/features';
 import { MapWebView } from '@/map/MapWebView';
 import { fireProximityNotification } from '@/geo/notify';
 
 export default function MapScreen() {
   const router = useRouter();
   const offers = useStore((s) => s.offers);
+  const taste = useStore((s) => s.taste);
+  // les plus pertinentes d'abord (bandit), cap pour garder la carte lisible
+  const mapOffers = useMemo(() => rankOffers(taste, offers).slice(0, 24), [taste, offers]);
 
   const simulate = () => {
     const target = offers.find((o) => o.sponsored) ?? offers[0];
@@ -24,7 +29,7 @@ export default function MapScreen() {
 
       <View style={styles.mapWrap}>
         <MapWebView
-          offers={offers}
+          offers={mapOffers}
           onSelectOffer={(id) => router.push({ pathname: '/offer/[id]', params: { id } })}
         />
         <Pressable style={styles.simulate} onPress={simulate} onLongPress={simulate}>

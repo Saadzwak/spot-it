@@ -33,9 +33,10 @@ export interface Offer {
   sponsored: boolean;
   // ── affichage ──
   whyTemplate?: string;     // "Pourquoi" de secours si pas d'agent / réseau
-  grad: [string, string];   // duotone placeholder (remplaçable par photo)
+  grad: [string, string];   // duotone fallback (si pas d'image)
   ink: string;
   wordmark: Wordmark;
+  image?: string;           // URL photo réelle (produit/boutique) — sinon fallback duotone
   address?: string;
   description?: string;
   // ── géo ──

@@ -1,14 +1,13 @@
-// onboarding.ts — options de goûts (étape 1) → clés de features pour le seed cold-start.
-// Sélectionner des tags pré-incline le profil (seedFromOnboarding → poids +1.0).
+// onboarding.ts — questions d'onboarding ancrées psycho d'achat.
+// Chaque réponse → clés de features (seedFromOnboarding → poids +1.0).
+// Axes (recherche conso) : goûts • porte-monnaie (dépensier↔radin) •
+// style d'achat (impulsif↔calculateur↔flâneur) • intention.
 import { catKey, offerTypeKey, priceBandKey, brandKey } from '@/learning/features';
 
-export interface TasteTag {
-  id: string;
-  label: string;
-  emoji: string;
-  picks: string[]; // clés de features (cf. CONTRACTS §2)
-}
+export interface TasteTag { id: string; label: string; emoji: string; picks: string[]; }
+export interface Archetype { id: string; label: string; emoji: string; sub: string; picks: string[]; }
 
+// Étape 1 — goûts (multi-select)
 export const TASTE_TAGS: TasteTag[] = [
   { id: 'sneakers', label: 'Sneakers & streetwear', emoji: '👟', picks: [catKey('mode'), brandKey('Nike'), priceBandKey('50-100')] },
   { id: 'mode', label: 'Mode & créateurs', emoji: '🧥', picks: [catKey('mode')] },
@@ -20,10 +19,33 @@ export const TASTE_TAGS: TasteTag[] = [
   { id: 'exclu', label: 'Exclusivités boutique', emoji: '💎', picks: [offerTypeKey('exclusive')] },
 ];
 
+// Étape 2 — profil porte-monnaie (single-select, noms taquins mais pas ridicules)
+export const WALLET_ARCHETYPES: Archetype[] = [
+  { id: 'depensier', label: 'Je dépense sans compter', emoji: '💸', sub: 'Le coup de cœur d’abord, le prix après',
+    picks: [offerTypeKey('exclusive'), priceBandKey('100+'), priceBandKey('50-100')] },
+  { id: 'malin', label: 'L’œil du bon plan', emoji: '🦅', sub: 'Toujours le bon deal au bon moment',
+    picks: [offerTypeKey('discount'), offerTypeKey('gift'), priceBandKey('20-50'), priceBandKey('50-100')] },
+  { id: 'radin', label: 'Radin sur pâte', emoji: '🧀', sub: 'Chaque euro compte, et c’est assumé',
+    picks: [offerTypeKey('discount'), offerTypeKey('voucher'), priceBandKey('0-20'), priceBandKey('20-50')] },
+  { id: 'standing', label: 'Question de standing', emoji: '👑', sub: 'La qualité et l’exclu, rien d’autre',
+    picks: [offerTypeKey('exclusive'), priceBandKey('100+')] },
+];
+
+// Étape 3 — style d'achat (single-select)
+export const BUYING_STYLES: Archetype[] = [
+  { id: 'impulsif', label: 'Coup de cœur, j’achète', emoji: '⚡', sub: 'Tu vois, tu aimes, tu prends',
+    picks: [offerTypeKey('discount'), offerTypeKey('gift')] },
+  { id: 'calculateur', label: 'Je calcule tout', emoji: '🧮', sub: 'Tu compares avant de te lancer',
+    picks: [offerTypeKey('voucher'), offerTypeKey('exclusive')] },
+  { id: 'flaneur', label: 'Je flâne pour le plaisir', emoji: '🛍️', sub: 'L’expérience compte autant que l’achat',
+    picks: [] },
+];
+
 export const INTENT_SUGGESTIONS = [
-  'Une veste mi-saison',
   'Des sneakers blanches',
+  'Une veste mi-saison',
   'Un cadeau beauté',
   'Un casque audio',
   'De quoi cosy mon salon',
+  'Un parfum',
 ];

@@ -6,6 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import Svg, { Defs, RadialGradient as SvgRadialGradient, Stop, Rect, Circle } from 'react-native-svg';
 import type { Offer } from '@/types/contracts';
 import { radius } from '@/design/tokens';
@@ -38,6 +39,15 @@ function BrandTile({ offer, rounded = radius.card, showMark = true, style, child
         end={GRAD_END}
         style={StyleSheet.absoluteFill}
       />
+
+      {offer.image ? (
+        <Image
+          source={{ uri: offer.image }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={250}
+        />
+      ) : null}
 
       {/* Top radial highlight — approximated with LinearGradient from top */}
       <LinearGradient
