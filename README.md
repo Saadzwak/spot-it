@@ -1,56 +1,55 @@
-# Welcome to your Expo app 👋
+# Spot.it — repère les meilleures offres autour de toi
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Plateforme **retail media** double-face (hackathon 24h) :
+- **Shopper** — déclare une intention, découvre des offres perso par **swipe** + **carte**, reçoit une alerte de **proximité** (~5 min / 400 m d'un magasin partenaire).
+- **Magasin** (qui paie) — profil enseigne, catalogue, ciblage, **KPIs temps réel**.
 
-## Get started
+Cerveau **multi-agents (API Claude)** + **boucle d'apprentissage en ligne** : chaque swipe met à jour un profil de goûts ; après ~5 swipes, le deck change visiblement. Consentement **RGPD** au centre (partage OFF par défaut).
 
-1. Install dependencies
+## Stack
 
-   ```bash
-   npm install
-   ```
+- **Expo SDK 56** (RN 0.85, React 19) + **expo-router** — testé dans **Expo Go**
+- Carte : **Mapbox GL JS v3 dans react-native-webview** (clé `pk.` only)
+- Géo : `expo-location` (avant-plan) · Notifs : `expo-notifications` (locales)
+- État : **zustand** · Backend : **Supabase** (PostGIS, RLS, Edge Functions)
+- Cerveau : **API Claude** côté serveur (`claude-haiku-4-5` / `claude-sonnet-4-6`)
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Démarrer (M0 — zéro clé requise)
 
 ```bash
-npm run reset-project
+npm install
+npx expo start            # scanne le QR avec Expo Go (Android conseillé)
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+M0 tourne **100% en local** (seed `src/data/offers.seed.ts`, bandit client, carte en fallback si pas de token). Pour activer la carte + le backend, copie `.env.example` → `.env` et renseigne les clés (voir ci-dessous).
 
-### Other setup steps
+## Variables d'environnement
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Voir [`.env.example`](.env.example). Client = `EXPO_PUBLIC_*` (public, RLS protège) :
+`EXPO_PUBLIC_MAPBOX_TOKEN` (pk.), `EXPO_PUBLIC_MAPBOX_STYLE`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_USE_BACKEND=true`.
+Serveur (jamais dans le client, `supabase secrets set`) : `ANTHROPIC_API_KEY`.
 
-## Learn more
+## Architecture
 
-To learn more about developing your project with Expo, look at the following resources:
+```
+src/
+  app/            écrans (expo-router): onboarding, (tabs) Découvrir/Carte/Wishlist/Profil, offer/[id], (merchant) dashboard
+  components/     design system RN (porté de design-ref) — SpotMark, BrandTile, WhyForYou…
+  design/         tokens (figés) + theme (fonts, presets)
+  learning/       bandit : features one-hot, score σ, SGD, reasonFor, epsilon-greedy
+  swipe/          SwipeDeck (geste rotation+spring)
+  map/            MapWebView + HTML Mapbox GL JS
+  geo/            proximité (Haversine) + notifs + géofencing (prod)
+  store/          zustand (profil, deck, wishlist, consent)
+  agents/         pont vers l'Edge Function recommend (+ mock local)
+  data/           seed d'offres partagé + options d'onboarding
+supabase/         migrations (schema/RLS/RPC), functions (recommend/profil), seed
+design-ref/       export Claude Design (référence visuelle)
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Contrats partagés (interfaces figées) : [`CONTRACTS.md`](CONTRACTS.md).
+Backend local : [`supabase/README.md`](supabase/README.md).
 
-## Join the community
+## Démo (2 min)
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Onboarding → swipe 5 sneakers → le deck se remplit de mode/streetwear + la ligne « Pourquoi pour toi » change → Carte (bulles + cercle 400 m) → « Simuler la marche » → notification → détail offre → dashboard magasin (KPIs).
