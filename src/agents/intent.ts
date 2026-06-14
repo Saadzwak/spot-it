@@ -48,6 +48,14 @@ const BUDGET_Q: FollowupQ = { id: 'budget', question: 'Ton budget ?', options: [
 
 export function localFollowups(intent: string): FollowupQ[] {
   const s = intent.toLowerCase();
+  // Scénario fête des pères / cadeau pour le père : on cible le PROFIL du père
+  // (âge + mode de vie) plutôt que le budget en premier.
+  if (/(p[èe]re|papa|f[êe]te des p[èe]res|father|dad)/.test(s)) {
+    return [
+      { id: 'age', question: 'Quel âge a ton père ?', options: ['30–45 ans', '45–60 ans', '60–75 ans', '75 ans +'] },
+      { id: 'life', question: 'Il est plutôt…', options: ['Sportif', 'Bricoleur', 'Casanier / cosy', 'Gourmet / apéro'] },
+    ];
+  }
   let second: FollowupQ;
   if (/(livre|book|bd|manga|roman)/.test(s)) second = { id: 'k', question: 'Quel genre ?', options: ['Roman', 'BD / manga', 'Essai', 'Jeunesse'] };
   else if (/(sneaker|basket|chaussure|running|nike|adidas)/.test(s)) second = { id: 'k', question: 'Quel style ?', options: ['Running', 'Lifestyle', 'Ville chic', 'Peu importe'] };
@@ -67,6 +75,11 @@ export function buildIntentPicks(intent: string, answers: Record<string, string>
   if (/(casque|écouteur|ecouteur|audio|tech|console|téléphone|telephone|ordinateur)/.test(s)) picks.add(catKey('tech'));
   if (/(salon|maison|déco|deco|meuble|chambre|cuisine)/.test(s)) picks.add(catKey('maison'));
   if (/(parfum|beauté|beaute|soin|crème|creme|maquillage)/.test(s)) picks.add(catKey('beaute'));
+  // mode de vie (scénario fête des pères → catégories pertinentes)
+  if (/(sportif|sport|running|fitness|vélo|velo)/.test(s)) { picks.add(catKey('tech')); picks.add(catKey('mode')); }
+  if (/(bricoleur|bricol|jardin|outil)/.test(s)) picks.add(catKey('maison'));
+  if (/(casanier|cosy|cocoon|canapé|canape)/.test(s)) picks.add(catKey('maison'));
+  if (/(gourmet|ap[ée]ro|barbecue|plancha|vin|whisky)/.test(s)) picks.add(catKey('maison'));
   // budget
   if (/< ?50|moins de 50|petit budget/.test(s)) { picks.add(priceBandKey('0-20')); picks.add(priceBandKey('20-50')); }
   else if (/50.?100/.test(s)) picks.add(priceBandKey('50-100'));

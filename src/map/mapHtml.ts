@@ -41,6 +41,7 @@ export function buildMapHtml(opts: {
   var OFFERS = ${JSON.stringify(markers)};
   var CENTER = ${JSON.stringify([center.lng, center.lat])};
   var pins = {};
+  var userMarker = null;
   function post(o){ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify(o)); } }
   var map = new mapboxgl.Map({ container:'map', style:${JSON.stringify(style)}, center:CENTER, zoom:14.4, pitch:0, bearing:0, attributionControl:false });
 
@@ -52,7 +53,7 @@ export function buildMapHtml(opts: {
       map.addLayer({ id:'prox-line', type:'line', source:'prox', paint:{ 'line-color':'#F9532E','line-width':1.5,'line-opacity':0.5 }});
     } catch(e){}
     var u = document.createElement('div'); u.className='userdot';
-    new mapboxgl.Marker({ element:u }).setLngLat(CENTER).addTo(map);
+    userMarker = new mapboxgl.Marker({ element:u }).setLngLat(CENTER).addTo(map);
     OFFERS.forEach(function(o){
       if(o.lat==null||o.lng==null) return;
       var el = document.createElement('div'); el.className='pin'+(o.sponsored?' sp':'');
@@ -90,9 +91,19 @@ export function buildMapHtml(opts: {
   }
   function clearRoute(){ highlight(null); if(map.getLayer('route-line')){ map.removeLayer('route-line'); } if(map.getLayer('route-casing')){ map.removeLayer('route-casing'); } if(map.getSource('route')){ map.removeSource('route'); } }
 
+  // Déplace le point utilisateur + le cercle de proximité et recentre en douceur,
+  // SANS recharger la carte (sinon on perd l'itinéraire et la main sur la carte).
+  function recenter(lng, lat){
+    CENTER = [lng, lat];
+    if(userMarker){ userMarker.setLngLat(CENTER); }
+    try { if(map.getSource('prox')){ map.getSource('prox').setData(turf.circle(CENTER, 0.4, { units:'kilometers', steps:80 })); } } catch(e){}
+    map.easeTo({ center:CENTER, duration:600 });
+  }
+
   function onRN(e){ try { var d=JSON.parse(e.data);
     if(d.type==='route'){ drawRoute(d.lng, d.lat, d.offerId); }
     else if(d.type==='clearRoute'){ clearRoute(); }
+    else if(d.type==='recenter'){ recenter(d.lng, d.lat); }
     else if(d.type==='flyTo'){ map.flyTo({ center:[d.lng,d.lat], zoom:15 }); }
   } catch(_){} }
   document.addEventListener('message', onRN); window.addEventListener('message', onRN);

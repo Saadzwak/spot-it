@@ -35,9 +35,14 @@ export interface MapWebViewProps {
 export function MapWebView({ offers, center = DEMO_USER, routeTo, onSelectOffer, onEta }: MapWebViewProps) {
   const ref = useRef<WebView>(null);
   const ready = useRef(false);
+  // On NE reconstruit le HTML que si les marqueurs changent (pas à chaque jitter
+  // GPS) — sinon la WebView se recharge et la carte se fige. Le recentrage léger
+  // passe par un message 'recenter', pas par un rebuild.
+  const centerKey = `${center.lat.toFixed(4)},${center.lng.toFixed(4)}`;
   const html = useMemo(
     () => buildMapHtml({ token: ENV.mapboxToken, style: ENV.mapboxStyle, center, markers: toMarkers(offers) }),
-    [offers, center],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [offers],
   );
 
   const sendRoute = () => {
@@ -45,7 +50,16 @@ export function MapWebView({ offers, center = DEMO_USER, routeTo, onSelectOffer,
     if (routeTo) ref.current?.postMessage(JSON.stringify({ type: 'route', lng: routeTo.lng, lat: routeTo.lat, offerId: routeTo.id }));
     else ref.current?.postMessage(JSON.stringify({ type: 'clearRoute' }));
   };
-  useEffect(sendRoute, [routeTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  // deps = l'ID de l'offre (primitif), PAS l'objet routeTo qui change de référence
+  // à chaque render → évite le spam de flyTo qui empêchait de bouger la carte.
+  useEffect(sendRoute, [routeTo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recentre la carte quand la vraie position arrive, sans recharger la WebView.
+  useEffect(() => {
+    if (!ready.current) return;
+    ref.current?.postMessage(JSON.stringify({ type: 'recenter', lng: center.lng, lat: center.lat }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerKey]);
 
   if (!hasMapbox()) {
     return (

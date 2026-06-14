@@ -54,8 +54,13 @@ export default function MapScreen() {
   }, [selectedId, ranked]);
 
   const selected = ranked.find((o) => o.id === selectedId) ?? offers.find((o) => o.id === selectedId);
-  const routeTo = selected && selected.lat != null && selected.lng != null
-    ? { id: selected.id, lat: selected.lat, lng: selected.lng } : null;
+  // mémoïsé : référence stable tant que l'offre sélectionnée ne change pas
+  // (sinon MapWebView relancerait l'itinéraire à chaque render → carte figée).
+  const routeTo = useMemo(
+    () => (selected && selected.lat != null && selected.lng != null
+      ? { id: selected.id, lat: selected.lat, lng: selected.lng } : null),
+    [selected?.id, selected?.lat, selected?.lng],
+  );
 
   const simulate = () => {
     let id = selectedId ?? ranked[0]?.id ?? null;

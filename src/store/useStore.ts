@@ -31,6 +31,7 @@ interface SpotState {
   // signaux
   wishlist: string[];
   liked: string[];
+  redeemed: string[]; // bons générés (QR "En profiter") — historique
   lastReason: string | null;
   lastSwipe: { offerId: string; accepted: boolean } | null;
 
@@ -43,6 +44,7 @@ interface SpotState {
   rebuildDeck: () => void;
   swipe: (offerId: string, accepted: boolean) => void;
   toggleWishlist: (offerId: string) => void;
+  markRedeemed: (offerId: string) => void;
   setConsent: (patch: Partial<Consent>) => void;
   reset: () => void;
 }
@@ -63,6 +65,7 @@ export const useStore = create<SpotState>()(
       intentHeadline: null,
       wishlist: [],
       liked: [],
+      redeemed: [],
       lastReason: null,
       lastSwipe: null,
 
@@ -150,13 +153,16 @@ export const useStore = create<SpotState>()(
         });
       },
 
+      markRedeemed: (offerId) =>
+        set({ redeemed: Array.from(new Set([...get().redeemed, offerId])) }),
+
       setConsent: (patch) => set({ consent: { ...get().consent, ...patch } }),
 
       reset: () =>
         set({
           onboarded: false, intent: undefined, consent: DEFAULT_CONSENT, taste: {},
           swipeCount: 0, offers: OFFERS, remainingIds: OFFERS.map((o) => o.id),
-          deck: [], wishlist: [], liked: [], lastReason: null, lastSwipe: null,
+          deck: [], wishlist: [], liked: [], redeemed: [], lastReason: null, lastSwipe: null,
         }),
     }),
     {
@@ -164,7 +170,7 @@ export const useStore = create<SpotState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         onboarded: s.onboarded, intent: s.intent, consent: s.consent,
-        taste: s.taste, swipeCount: s.swipeCount, wishlist: s.wishlist, liked: s.liked,
+        taste: s.taste, swipeCount: s.swipeCount, wishlist: s.wishlist, liked: s.liked, redeemed: s.redeemed,
       }),
       onRehydrateStorage: () => (state) => { state?.rebuildDeck(); },
     },

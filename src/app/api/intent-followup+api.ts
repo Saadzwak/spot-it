@@ -45,7 +45,10 @@ export async function POST(request: Request): Promise<Response> {
           "Tu es l'assistant shopping de Spot.it. À partir d'un besoin déclaré par l'utilisateur, " +
           'génère EXACTEMENT 2 questions de clarification très courtes en français, étroitement liées ' +
           'à ce besoin, pour mieux le cerner et accélérer la recommandation. Chaque question a 3 à 4 ' +
-          'options courtes (1 à 3 mots). Inclure le budget seulement si pertinent. Tutoiement, ton sympa.',
+          'options courtes (1 à 3 mots). Inclure le budget seulement si pertinent. Tutoiement, ton sympa. ' +
+          "IMPORTANT — si le besoin est un CADEAU pour une personne (ex. père / fête des pères, mère, ami), " +
+          'tes 2 questions doivent porter sur le DESTINATAIRE : 1) sa tranche d\'âge, et 2) son mode de vie / ' +
+          'centres d\'intérêt (ex. Sportif, Bricoleur, Casanier, Gourmet) — PAS le budget.',
         messages: [{ role: 'user', content: `Besoin: "${intent}"` }],
         output_config: { format: { type: 'json_schema', schema: SCHEMA } },
       }),

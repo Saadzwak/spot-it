@@ -6,15 +6,22 @@ import { DEMO_USER } from '@/data/offers.seed';
 import { haversineM } from './proximity';
 
 export function anchorOffers(offers: Offer[], center: { lat: number; lng: number }): Offer[] {
+  // Le seed est désormais ancré à Lille (EuraTechnologies) avec de VRAIES adresses.
+  // Si l'utilisateur est dans la métropole lilloise (≤25 km de DEMO_USER), on garde
+  // les coordonnées + adresses réelles (juste recalcul des distances). S'il est
+  // ailleurs, on translate la disposition autour de lui et on masque l'adresse
+  // (qui ne correspondrait plus à sa ville).
+  const far = haversineM(center.lat, center.lng, DEMO_USER.lat, DEMO_USER.lng) > 25_000;
   const dLat = center.lat - DEMO_USER.lat;
   const dLng = center.lng - DEMO_USER.lng;
   return offers.map((o) => {
     if (o.lat == null || o.lng == null) return o;
-    const lat = o.lat + dLat;
-    const lng = o.lng + dLng;
+    const lat = far ? o.lat + dLat : o.lat;
+    const lng = far ? o.lng + dLng : o.lng;
     const distanceM = Math.round(haversineM(center.lat, center.lng, lat, lng));
-    // l'adresse du seed est parisienne : on l'efface une fois ré-ancré (sinon
-    // "Lille" afficherait une rue de Paris). On montre la distance à la place.
-    return { ...o, lat, lng, distanceM, walkMin: Math.max(1, Math.round(distanceM / 80)), address: undefined };
+    const walkMin = Math.max(1, Math.round(distanceM / 80));
+    return far
+      ? { ...o, lat, lng, distanceM, walkMin, address: undefined }
+      : { ...o, distanceM, walkMin };
   });
 }
