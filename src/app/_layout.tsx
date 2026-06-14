@@ -32,9 +32,14 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="index" />
+          <Stack.Screen name="welcome" />
           <Stack.Screen name="onboarding" />
+          <Stack.Screen name="landing" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(merchant)" />
           <Stack.Screen name="offer/[id]" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="redeem/[id]" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="ar" options={{ animation: 'slide_from_bottom' }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
