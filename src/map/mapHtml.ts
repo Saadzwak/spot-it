@@ -118,12 +118,52 @@ export function buildMapHtml(opts: {
     map.fitBounds(b, { padding:{ top:90, bottom:360, left:50, right:50 }, duration:700, maxZoom:16.5 });
   }
 
+  // ——— Navigation temps réel : caméra qui SUIT (zoom rue + cap + pitch) ———
+  var navOn=false, navRAF=null, routeCum=null, routeTot=0;
+  function _hav(a,b){ var R=6371000,r=function(x){return x*Math.PI/180;};
+    var dLa=r(b[1]-a[1]),dLn=r(b[0]-a[0]);
+    var s=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(r(a[1]))*Math.cos(r(b[1]))*Math.sin(dLn/2)*Math.sin(dLn/2);
+    return 2*R*Math.asin(Math.sqrt(s)); }
+  function _brg(a,b){ var r=function(x){return x*Math.PI/180;},D=function(x){return x*180/Math.PI;};
+    var y=Math.sin(r(b[0]-a[0]))*Math.cos(r(b[1]));
+    var x=Math.cos(r(a[1]))*Math.sin(r(b[1]))-Math.sin(r(a[1]))*Math.cos(r(b[1]))*Math.cos(r(b[0]-a[0]));
+    return D(Math.atan2(y,x)); }
+  function _buildCum(){ routeCum=[0]; routeTot=0; if(!lastRouteCoords) return;
+    for(var i=1;i<lastRouteCoords.length;i++){ routeTot+=_hav(lastRouteCoords[i-1],lastRouteCoords[i]); routeCum.push(routeTot); } }
+  function _at(d){ if(!lastRouteCoords||lastRouteCoords.length<2) return null;
+    if(d<=0) return {pos:lastRouteCoords[0],brg:_brg(lastRouteCoords[0],lastRouteCoords[1])};
+    if(d>=routeTot){ var n=lastRouteCoords.length; return {pos:lastRouteCoords[n-1],brg:_brg(lastRouteCoords[n-2],lastRouteCoords[n-1])}; }
+    for(var i=1;i<routeCum.length;i++){ if(routeCum[i]>=d){ var s=lastRouteCoords[i-1],e=lastRouteCoords[i],L=routeCum[i]-routeCum[i-1],t=L>0?(d-routeCum[i-1])/L:0;
+      return {pos:[s[0]+(e[0]-s[0])*t, s[1]+(e[1]-s[1])*t], brg:_brg(s,e)}; } } return null; }
+  function navStart(){ navOn=true; _buildCum();
+    var st=(lastRouteCoords&&lastRouteCoords[0])||CENTER;
+    var b=(lastRouteCoords&&lastRouteCoords.length>1)?_brg(lastRouteCoords[0],lastRouteCoords[1]):0;
+    if(userMarker) userMarker.setLngLat(st);
+    map.easeTo({ center:st, zoom:17.8, pitch:55, bearing:b, duration:900, padding:{ bottom:160 } }); }
+  function navTo(lng,lat){ if(!navOn) return; if(navRAF){ cancelAnimationFrame(navRAF); navRAF=null; } // vrai GPS prioritaire sur la simu
+    if(userMarker) userMarker.setLngLat([lng,lat]);
+    map.easeTo({ center:[lng,lat], zoom:17.8, pitch:55, duration:1000 });
+    post({ type:'navProgress', lng:lng, lat:lat }); }
+  function navSim(){ if(!lastRouteCoords||lastRouteCoords.length<2) return; navOn=true; _buildCum();
+    if(navRAF) cancelAnimationFrame(navRAF);
+    var d=0, speed=Math.max(10, routeTot/18), last=null;
+    function fr(ts){ if(!navOn){ navRAF=null; return; } if(last==null) last=ts; var dt=Math.min(0.05,(ts-last)/1000); last=ts; d+=speed*dt;
+      var r=_at(d); if(!r){ navRAF=null; post({type:'navArrived'}); return; }
+      if(userMarker) userMarker.setLngLat(r.pos);
+      map.jumpTo({ center:r.pos, bearing:r.brg, zoom:17.8, pitch:55 });
+      post({ type:'navProgress', lng:r.pos[0], lat:r.pos[1] });
+      if(d>=routeTot){ navRAF=null; post({type:'navArrived'}); return; }
+      navRAF=requestAnimationFrame(fr); }
+    navRAF=requestAnimationFrame(fr); }
+  function navStop(){ navOn=false; if(navRAF){ cancelAnimationFrame(navRAF); navRAF=null; }
+    map.easeTo({ pitch:0, bearing:0, duration:600, padding:{ bottom:0 } }); }
+
   function onRN(e){ try { var d=JSON.parse(e.data);
     if(d.type==='route'){ drawRoute(d.lng, d.lat, d.offerId); }
     else if(d.type==='clearRoute'){ clearRoute(); }
     else if(d.type==='recenter'){ recenter(d.lng, d.lat); }
     else if(d.type==='fitRoute'){ fitRoute(); }
-    else if(d.type==='navZoom'){ map.flyTo({ center: CENTER, zoom: d.zoom || 17.5, duration: 700 }); }
+    else if(d.type==='nav'){ if(d.cmd==='start') navStart(); else if(d.cmd==='sim') navSim(); else if(d.cmd==='to') navTo(d.lng,d.lat); else if(d.cmd==='stop') navStop(); }
     else if(d.type==='flyTo'){ map.flyTo({ center:[d.lng,d.lat], zoom:15 }); }
   } catch(_){} }
   document.addEventListener('message', onRN); window.addEventListener('message', onRN);

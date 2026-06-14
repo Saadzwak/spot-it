@@ -6,7 +6,7 @@ import { Screen, SpotLogo, Icon, NotifPermissionModal, ItinerarySheet } from '@/
 import { colors, font, shadows, radius, text } from '@/design/theme';
 import { useStore } from '@/store/useStore';
 import { rankOffers } from '@/learning/features';
-import { MapWebView, type MapEta } from '@/map/MapWebView';
+import { MapWebView, type MapEta, type NavCmd } from '@/map/MapWebView';
 import { useRealLocation } from '@/geo/useLocation';
 import { fireProximityNotification, ensureNotifPermission } from '@/geo/notify';
 import { haversineM } from '@/geo/proximity';
@@ -47,13 +47,12 @@ export default function MapScreen() {
   const routeFromParam = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  // mode navigation temps réel
+  // mode navigation temps réel (caméra qui suit, pilotée par le WebView)
   const [navving, setNavving] = useState(false);
-  const [navPos, setNavPos] = useState<{ lat: number; lng: number } | null>(null);
   const [stepIdx, setStepIdx] = useState(0);
-  const [navZoomTick, setNavZoomTick] = useState(0);
+  const [navCmd, setNavCmd] = useState<NavCmd | null>(null);
+  const navSeq = useRef(0);
   const watchSub = useRef<Location.LocationSubscription | null>(null);
-  const simTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const select = (id: string | null) => { setSelectedId(id); setEta(null); if (id) track('offer_select', { offerId: id }); };
   const openOffer = (id: string) => { track('offer_open', { offerId: id }); router.push({ pathname: '/offer/[id]', params: { id } }); };
@@ -104,7 +103,9 @@ export default function MapScreen() {
   const requestItinerary = () => { setOverviewTick((t) => t + 1); setShowItinerary(true); };
 
   // ——— Mode navigation temps réel ———
-  const clearSim = () => { if (simTimer.current) { clearTimeout(simTimer.current); simTimer.current = null; } };
+  const sendNav = (cmd: NavCmd['cmd'], lng?: number, lat?: number) => {
+    navSeq.current += 1; setNavCmd({ seq: navSeq.current, cmd, lng, lat });
+  };
 
   // avance l'étape courante quand on arrive sur sa manœuvre (~30 m)
   const advanceStepByPos = (lat: number, lng: number) => {
@@ -119,56 +120,42 @@ export default function MapScreen() {
     });
   };
 
+  // La caméra SUIT (zoom rue + cap + pitch). Animation fluide pour la démo ;
+  // le vrai GPS prend la main dès que l'utilisateur marche (watchPositionAsync).
   const startNav = async () => {
-    setShowItinerary(false);
-    setNavving(true); setStepIdx(0);
-    setNavPos(userLoc ?? DEMO_USER);
-    setNavZoomTick((t) => t + 1);
+    setShowItinerary(false); setNavving(true); setStepIdx(0);
     track('nav_start', { offerId: selected?.id });
+    sendNav('start');
+    setTimeout(() => sendNav('sim'), 950);
     try {
       watchSub.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 2000 },
-        (pos) => { const { latitude, longitude } = pos.coords; setNavPos({ lat: latitude, lng: longitude }); advanceStepByPos(latitude, longitude); },
+        (pos) => { const { latitude, longitude } = pos.coords; sendNav('to', longitude, latitude); advanceStepByPos(latitude, longitude); },
       );
     } catch { /* GPS indisponible */ }
   };
 
-  // démo sans marcher : anime la position le long du tracé
-  const simulateRoute = () => {
-    const coords = eta?.coords; if (!coords || coords.length < 2) return;
-    clearSim();
-    const total = coords.length;
-    const stride = Math.max(1, Math.floor(total / 60));
-    let i = 0;
-    const tick = () => {
-      if (i >= total) { clearSim(); return; }
-      const [lng, lat] = coords[i];
-      setNavPos({ lat, lng }); advanceStepByPos(lat, lng);
-      i += stride;
-      simTimer.current = setTimeout(tick, 220);
-    };
-    tick();
-  };
+  const replayNav = () => { setStepIdx(0); sendNav('sim'); };
 
   const endNav = () => {
-    clearSim();
     watchSub.current?.remove(); watchSub.current = null;
-    setNavving(false); setNavPos(null); setStepIdx(0);
+    sendNav('stop'); setNavving(false); setStepIdx(0);
     setOverviewTick((t) => t + 1);
     track('nav_end', { offerId: selected?.id });
   };
 
-  useEffect(() => () => { clearSim(); watchSub.current?.remove(); }, []);
+  const onNav = (e: { type: string; lng?: number; lat?: number }) => {
+    if (e.type === 'navProgress' && e.lat != null && e.lng != null) advanceStepByPos(e.lat, e.lng);
+  };
+
+  useEffect(() => () => { watchSub.current?.remove(); }, []);
 
   const empty = matchedIds != null && ranked.length === 0;
   const carouselTitle = `Top ${ranked.length} pour toi`;
 
   const navStep = eta?.steps?.[stepIdx];
   const navInstruction = navStep?.instruction || 'Continue tout droit';
-  const navNextLoc = navStep?.location;
-  const navDist = navPos && navNextLoc
-    ? `${Math.round(haversineM(navPos.lat, navPos.lng, navNextLoc[1], navNextLoc[0]))} m`
-    : (navStep?.distanceM ? `${navStep.distanceM} m` : '');
+  const navDist = navStep?.distanceM ? `${navStep.distanceM} m` : '';
 
   return (
     <Screen padded={false}>
@@ -180,15 +167,17 @@ export default function MapScreen() {
       <View style={styles.mapWrap}>
         <MapWebView
           offers={ranked}
-          center={navving && navPos ? navPos : (userLoc ?? DEMO_USER)}
+          center={userLoc ?? DEMO_USER}
           routeTo={routeTo}
           overviewSignal={overviewTick}
-          navZoomSignal={navZoomTick}
+          navCmd={navCmd}
           onSelectOffer={(id) => select(id)}
+          onNav={onNav}
           onEta={(e) => {
             setEta(e);
-            // l'utilisateur a demandé l'itinéraire depuis l'offre → vue d'ensemble + étapes
-            if (e && !e.error && routeFromParam.current) { routeFromParam.current = false; setOverviewTick((t) => t + 1); setShowItinerary(true); }
+            // l'utilisateur a demandé l'itinéraire depuis l'offre → on lance DIRECTEMENT
+            // le mode navigation (caméra qui suit), pas l'aperçu texte.
+            if (e && !e.error && routeFromParam.current) { routeFromParam.current = false; void startNav(); }
           }}
         />
 
@@ -202,13 +191,13 @@ export default function MapScreen() {
             </Pressable>
           </>
         ) : (
-          <View style={styles.navBanner}>
+          <Pressable style={styles.navBanner} onPress={() => setShowItinerary(true)}>
             <View style={styles.navIcon}><Icon name="nav" size={20} color="#fff" /></View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.navStep} numberOfLines={2}>{navInstruction}</Text>
-              <Text style={styles.navMeta} numberOfLines={1}>{navDist ? navDist + ' · ' : ''}{selected?.brand}</Text>
+              <Text style={styles.navMeta} numberOfLines={1}>{navDist ? navDist + ' · ' : ''}{selected?.brand} · Étapes ›</Text>
             </View>
-          </View>
+          </Pressable>
         )}
 
         {empty ? (
@@ -234,7 +223,7 @@ export default function MapScreen() {
               <Text style={styles.etaInfo} numberOfLines={1}>{eta.durationMin} min · {eta.distanceM} m · <Text style={styles.etaLink}>Voir l'offre ›</Text></Text>
             </View>
           </Pressable>
-          <Pressable style={styles.etaGo} onPress={requestItinerary}>
+          <Pressable style={styles.etaGo} onPress={startNav}>
             <Icon name="nav" size={15} color="#fff" /><Text style={styles.etaGoTxt}>Y aller</Text>
           </Pressable>
           <Pressable hitSlop={10} onPress={() => select(null)} style={styles.etaClose}>
@@ -267,8 +256,8 @@ export default function MapScreen() {
 
       {navving ? (
         <View style={styles.navControls}>
-          <Pressable style={styles.navSim} onPress={simulateRoute}>
-            <Icon name="walk" size={16} color="#fff" /><Text style={styles.navSimTxt}>Simuler le trajet</Text>
+          <Pressable style={styles.navSim} onPress={replayNav}>
+            <Icon name="walk" size={16} color="#fff" /><Text style={styles.navSimTxt}>Rejouer le trajet</Text>
           </Pressable>
           <Pressable style={styles.navEnd} onPress={endNav}>
             <Text style={styles.navEndTxt}>Terminer</Text>

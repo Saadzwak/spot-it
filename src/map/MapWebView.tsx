@@ -30,12 +30,15 @@ export interface MapWebViewProps {
   center?: { lat: number; lng: number };
   routeTo?: { id: string; lat: number; lng: number } | null;
   overviewSignal?: number; // incrémenter pour cadrer TOUT le tracé (vue d'ensemble)
-  navZoomSignal?: number;  // incrémenter pour zoomer au niveau navigation sur le user
+  navCmd?: NavCmd | null;  // commande de navigation (changer .seq pour l'émettre)
   onSelectOffer?: (offerId: string) => void;
   onEta?: (e: MapEta) => void;
+  onNav?: (e: { type: string; lng?: number; lat?: number }) => void;
 }
 
-export function MapWebView({ offers, center = DEMO_USER, routeTo, overviewSignal, navZoomSignal, onSelectOffer, onEta }: MapWebViewProps) {
+export interface NavCmd { seq: number; cmd: 'start' | 'sim' | 'to' | 'stop'; lng?: number; lat?: number }
+
+export function MapWebView({ offers, center = DEMO_USER, routeTo, overviewSignal, navCmd, onSelectOffer, onEta, onNav }: MapWebViewProps) {
   const ref = useRef<WebView>(null);
   const ready = useRef(false);
   // On NE reconstruit le HTML que si les marqueurs changent (pas à chaque jitter
@@ -70,11 +73,11 @@ export function MapWebView({ offers, center = DEMO_USER, routeTo, overviewSignal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overviewSignal]);
 
-  // Zoom niveau navigation sur la position du user (mode nav).
+  // Commandes de navigation (start/sim/to/stop) → moteur de suivi du WebView.
   useEffect(() => {
-    if (ready.current && navZoomSignal) ref.current?.postMessage(JSON.stringify({ type: 'navZoom', zoom: 17.5 }));
+    if (ready.current && navCmd) ref.current?.postMessage(JSON.stringify({ type: 'nav', cmd: navCmd.cmd, lng: navCmd.lng, lat: navCmd.lat }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navZoomSignal]);
+  }, [navCmd?.seq]);
 
   if (!hasMapbox()) {
     return (
@@ -91,6 +94,7 @@ export function MapWebView({ offers, center = DEMO_USER, routeTo, overviewSignal
       if (d?.type === 'ready') { ready.current = true; sendRoute(); }
       else if (d?.type === 'select' && d.offerId) onSelectOffer?.(d.offerId);
       else if (d?.type === 'eta') onEta?.(d as MapEta);
+      else if (d?.type === 'navProgress' || d?.type === 'navArrived') onNav?.(d);
     } catch { /* ignore */ }
   };
 

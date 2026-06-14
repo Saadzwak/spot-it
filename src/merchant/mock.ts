@@ -122,6 +122,107 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   beaute: 'Beauté',
 };
 
+// ── Per-offer performance (impressions/clicks/visits/conversions/CTR) ─────────
+export interface OfferPerformance {
+  offerId: string;
+  impressions: number;
+  clicks: number;
+  visits: number;
+  conversions: number;
+  ctr: number; // clicks / impressions
+}
+
+export const MOCK_OFFER_PERFORMANCE: Record<string, OfferPerformance> = {
+  'veja-campo':          { offerId: 'veja-campo',          impressions: 1240, clicks: 186, visits: 62, conversions: 14, ctr: 0.150 },
+  'veja-volley':         { offerId: 'veja-volley',         impressions:  890, clicks: 107, visits: 34, conversions:  8, ctr: 0.120 },
+  'salar-alveomesh':     { offerId: 'salar-alveomesh',     impressions:  640, clicks:  70, visits: 22, conversions:  5, ctr: 0.109 },
+  'etna-suede':          { offerId: 'etna-suede',          impressions:  510, clicks:  56, visits: 18, conversions:  4, ctr: 0.110 },
+  'gt-nolyn':            { offerId: 'gt-nolyn',            impressions:  480, clicks:  53, visits: 17, conversions:  4, ctr: 0.110 },
+  'nike-af1-kobe':       { offerId: 'nike-af1-kobe',       impressions: 1580, clicks: 237, visits: 82, conversions: 21, ctr: 0.150 },
+  'nike-am90-laser':     { offerId: 'nike-am90-laser',     impressions: 1420, clicks: 199, visits: 65, conversions: 18, ctr: 0.140 },
+  'nike-amplus-fff':     { offerId: 'nike-amplus-fff',     impressions: 1100, clicks: 132, visits: 41, conversions: 11, ctr: 0.120 },
+  'nike-ava-x':          { offerId: 'nike-ava-x',          impressions:  860, clicks:  94, visits: 30, conversions:  7, ctr: 0.109 },
+  'nike-mercurial-vapor17': { offerId: 'nike-mercurial-vapor17', impressions: 720, clicks: 79, visits: 25, conversions: 6, ctr: 0.110 },
+  'uniqlo-parka-ultra-light': { offerId: 'uniqlo-parka-ultra-light', impressions: 980, clicks: 118, visits: 38, conversions: 10, ctr: 0.120 },
+  'cos-manteau-oversize':{ offerId: 'cos-manteau-oversize', impressions: 740, clicks:  81, visits: 26, conversions:  6, ctr: 0.109 },
+  'carhartt-wip-detroit-jacket': { offerId: 'carhartt-wip-detroit-jacket', impressions: 860, clicks: 112, visits: 37, conversions: 9, ctr: 0.130 },
+  'apple-airpods-pro-2': { offerId: 'apple-airpods-pro-2', impressions: 1680, clicks: 235, visits: 76, conversions: 18, ctr: 0.140 },
+  'samsung-galaxy-s25':  { offerId: 'samsung-galaxy-s25',  impressions: 1540, clicks: 215, visits: 70, conversions: 16, ctr: 0.140 },
+  'dior-sauvage-coffret':{ offerId: 'dior-sauvage-coffret', impressions: 1020, clicks: 143, visits: 45, conversions: 12, ctr: 0.140 },
+  'weber-q2200-plancha': { offerId: 'weber-q2200-plancha', impressions:  680, clicks:  68, visits: 21, conversions:  5, ctr: 0.100 },
+  'lecreuset-cocotte-24cm': { offerId: 'lecreuset-cocotte-24cm', impressions: 590, clicks: 59, visits: 19, conversions: 4, ctr: 0.100 },
+};
+
+export function offerPerformanceFor(offerId: string): OfferPerformance {
+  return MOCK_OFFER_PERFORMANCE[offerId] ?? {
+    offerId,
+    impressions: 0, clicks: 0, visits: 0, conversions: 0, ctr: 0,
+  };
+}
+
+// ── Modèle de dépense (fixed + variable) ─────────────────────────────────────
+export interface SpendModel {
+  fixedCents: number;    // abonnement mensuel
+  variableCents: number; // dépense CPC/CPM au volume
+  totalCents: number;    // somme
+  fixedLabel: string;
+  variableLabel: string;
+}
+
+export interface SpendDayData {
+  label: string;
+  fixed: number;   // en centimes
+  variable: number; // en centimes
+}
+
+export const MOCK_SPEND_MODEL_7J: SpendModel = {
+  fixedCents: 4900,
+  variableCents: 13300,
+  totalCents: 18200,
+  fixedLabel: 'Forfait hebdo (socle)',
+  variableLabel: 'Performance (CPC · clics)',
+};
+
+export const MOCK_SPEND_MODEL_30J: SpendModel = {
+  fixedCents: 19600,
+  variableCents: 55000,
+  totalCents: 74600,
+  fixedLabel: 'Forfait mensuel (socle)',
+  variableLabel: 'Performance (CPC · clics)',
+};
+
+// Séries journalières de dépense (fixed + variable) — 7j et 30j
+export const MOCK_SPEND_DAILY_7J: SpendDayData[] = [
+  { label: 'Lun', fixed: 700, variable: 1420 },
+  { label: 'Mar', fixed: 700, variable: 1880 },
+  { label: 'Mer', fixed: 700, variable: 1740 },
+  { label: 'Jeu', fixed: 700, variable: 2140 },
+  { label: 'Ven', fixed: 700, variable: 2580 },
+  { label: 'Sam', fixed: 700, variable: 1640 },
+  { label: 'Dim', fixed: 700, variable: 1900 },
+];
+
+const SPEND_VAR_30: number[] = [
+  980, 1280, 1380, 1320, 1520, 1160,  860,
+  1280, 1620, 1500, 1700, 1880, 1400, 1060,
+  1400, 1780, 1660, 1820, 2060, 1520, 1180,
+  1520, 1820, 1740, 1920, 2240, 1660, 1260,
+  1620, 1940,
+];
+export const MOCK_SPEND_DAILY_30J: SpendDayData[] = SPEND_VAR_30.map((variable, i) => ({
+  label: i % 7 === 0 ? `J${i + 1}` : '',
+  fixed: 653, // 19600 / 30 ≈ 653
+  variable,
+}));
+
+export function spendModelFor(period: Period): SpendModel {
+  return period === '7j' ? MOCK_SPEND_MODEL_7J : MOCK_SPEND_MODEL_30J;
+}
+
+export function spendSeriesFor(period: Period): SpendDayData[] {
+  return period === '7j' ? MOCK_SPEND_DAILY_7J : MOCK_SPEND_DAILY_30J;
+}
+
 // ── Campagnes (mode démo) ─────────────────────────────────────────────────────
 export interface MerchantCampaign {
   id: string;
@@ -130,15 +231,69 @@ export interface MerchantCampaign {
   budgetCents: number;
   spendCents: number;
   status: 'active' | 'paused';
+  // Extended detail fields (optional — not set for optimistic adds)
+  archetypes?: string[];
+  priceBands?: PriceBand[];
+  dayparts?: string[];
+  impressions?: number;
+  clicks?: number;
+  conversions?: number;
 }
 
 export const MOCK_CAMPAIGNS: MerchantCampaign[] = [
-  { id: 'camp-1', categories: ['mode'],         radiusM: 800,  budgetCents: 5000, spendCents: 3120, status: 'active' },
-  { id: 'camp-2', categories: ['mode', 'beaute'], radiusM: 1500, budgetCents: 8000, spendCents: 1450, status: 'paused' },
+  {
+    id: 'camp-1',
+    categories: ['mode'],
+    radiusM: 800,
+    budgetCents: 5000,
+    spendCents: 3120,
+    status: 'active',
+    archetypes: ['malin', 'depensier'],
+    priceBands: ['50-100', '100+'],
+    dayparts: ['matin', 'soir'],
+    impressions: 2840,
+    clicks: 213,
+    conversions: 11,
+  },
+  {
+    id: 'camp-2',
+    categories: ['mode', 'beaute'],
+    radiusM: 1500,
+    budgetCents: 8000,
+    spendCents: 1450,
+    status: 'paused',
+    archetypes: ['standing'],
+    priceBands: ['100+'],
+    dayparts: ['midi', 'weekend'],
+    impressions: 980,
+    clicks: 68,
+    conversions: 3,
+  },
+  {
+    id: 'camp-3',
+    categories: ['tech'],
+    radiusM: 400,
+    budgetCents: 3000,
+    spendCents: 2780,
+    status: 'active',
+    archetypes: ['malin', 'depensier', 'standing'],
+    priceBands: ['100+'],
+    dayparts: ['matin', 'midi', 'soir'],
+    impressions: 1680,
+    clicks: 151,
+    conversions: 7,
+  },
 ];
+
+export const ARCHETYPE_LABELS: Record<string, string> = {
+  malin: "L'œil du bon plan",
+  depensier: 'Dépense sans compter',
+  standing: 'Question de standing',
+  radin: 'Radin sur pâte',
+};
 
 export function campaignLabel(c: Pick<MerchantCampaign, 'categories' | 'radiusM'>): string {
   const cats = c.categories.map((k) => CATEGORY_LABELS[k]).join(' · ');
-  const radius = c.radiusM >= 1000 ? `${(c.radiusM / 1000).toLocaleString('fr-FR')} km` : `${c.radiusM} m`;
-  return `${cats || 'Toutes catégories'} — ${radius}`;
+  const radiusStr = c.radiusM >= 1000 ? `${(c.radiusM / 1000).toLocaleString('fr-FR')} km` : `${c.radiusM} m`;
+  return `${cats || 'Toutes catégories'} — ${radiusStr}`;
 }
