@@ -103,23 +103,32 @@ export default function MerchantLayout() {
         </View>
       </View>
 
-      {/* ── Segmented nav ─────────────────────────────────────────────────── */}
+      {/* ── Segmented nav (contrôle unifié) ────────────────────────────────── */}
       <View style={styles.navBar}>
-        <View style={[styles.navInner, centered]}>
-          {NAV_ITEMS.map((item, i) => {
-            const active = activeTab === i;
-            return (
-              <Pressable
-                key={item.href}
-                onPress={() => router.replace(item.href)}
-                style={[styles.navPill, active && styles.navPillActive]}
-              >
-                <Text style={[styles.navLabel, active && styles.navLabelActive]}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View style={[styles.navOuter, centered]}>
+          <View style={styles.navTrack}>
+            {NAV_ITEMS.map((item, i) => {
+              const active = activeTab === i;
+              return (
+                <Pressable
+                  key={item.href}
+                  onPress={() => router.replace(item.href)}
+                  style={({ pressed }) => [
+                    styles.navSeg,
+                    active && styles.navSegActive,
+                    pressed && !active && styles.navSegPressed,
+                  ]}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.navLabel, active && styles.navLabelActive]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </View>
 
@@ -214,26 +223,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
-  navInner: {
+  navOuter: {
+    paddingHorizontal: 16,
+  },
+  navTrack: {
     flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 16,
-  },
-  navPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    backgroundColor: colors.canvas,
     borderRadius: radius.pill,
-    backgroundColor: 'transparent',
+    padding: 4,
+    gap: 2,
   },
-  navPillActive: {
+  navSeg: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    borderRadius: radius.pill,
+  },
+  navSegActive: {
     backgroundColor: colors.ink,
+  },
+  navSegPressed: {
+    opacity: 0.55,
   },
   navLabel: {
     fontFamily: font.bodySemiBold,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.ink2,
     letterSpacing: -0.1,
+    textAlign: 'center',
   },
   navLabelActive: {
     color: colors.white,
