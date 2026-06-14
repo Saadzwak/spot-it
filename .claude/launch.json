@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "expo-web", "runtimeExecutable": "npx", "runtimeArgs": ["expo", "start", "--web", "--port", "8091"], "port": 8091 },
+    { "name": "web-prod", "runtimeExecutable": "npx", "runtimeArgs": ["serve", "-s", "dist-web", "-l", "8092"], "port": 8092 }
+  ]
+}
