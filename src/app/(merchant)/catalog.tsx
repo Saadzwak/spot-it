@@ -177,7 +177,7 @@ export default function Catalog(): React.ReactElement {
   const { offers: fetched, loading } = useMerchantOffers();
   const { width } = useWindowDimensions();
   const maxWidth = Math.min(width, 960);
-  const centered: object = Platform.OS === 'web' ? { width: maxWidth, alignSelf: 'center' } : {};
+  const centered: object = { width: '100%', maxWidth: 960, alignSelf: 'center' };
   const wide = Platform.OS === 'web' && width >= 760;
 
   // Liste locale (optimiste) initialisée depuis le fetch.

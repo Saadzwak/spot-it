@@ -51,7 +51,7 @@ const RADIUS_FACTOR: Record<number, number> = { 400: 0.5, 800: 1, 1500: 1.9 };
 export default function Targeting(): React.ReactElement {
   const { width } = useWindowDimensions();
   const maxWidth = Math.min(width, 960);
-  const centered: object = Platform.OS === 'web' ? { width: maxWidth, alignSelf: 'center' } : {};
+  const centered: object = { width: '100%', maxWidth: 960, alignSelf: 'center' };
 
   const [selectedCats, setSelectedCats] = useState<Set<Category>>(new Set(['mode']));
   const [selectedArchs, setArchs]       = useState<Set<string>>(new Set(['malin']));

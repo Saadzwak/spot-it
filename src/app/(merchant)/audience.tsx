@@ -23,7 +23,7 @@ export default function Audience(): React.ReactElement {
   const { topOffers, byCategory, byPriceBand, archetypes, loading } = useAudienceInsights();
   const { width } = useWindowDimensions();
   const maxWidth = Math.min(width, 960);
-  const centered: object = Platform.OS === 'web' ? { width: maxWidth, alignSelf: 'center' } : {};
+  const centered: object = { width: '100%', maxWidth: 960, alignSelf: 'center' };
 
   return (
     <ScrollView

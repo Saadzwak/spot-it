@@ -61,7 +61,7 @@ export default function Dashboard(): React.ReactElement {
   const { kpis, prev, loading, live } = useStoreKpis(period);
   const { width } = useWindowDimensions();
   const maxWidth = Math.min(width, 960);
-  const centered: object = Platform.OS === 'web' ? { width: maxWidth, alignSelf: 'center' } : {};
+  const centered: object = { width: '100%', maxWidth: 960, alignSelf: 'center' };
 
   const series = useMemo(() => dailySeriesFor(period), [period]);
 

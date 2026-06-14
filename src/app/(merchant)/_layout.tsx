@@ -40,10 +40,10 @@ export default function MerchantLayout() {
     return <Redirect href="/(merchant)/login" />;
   }
 
-  const maxWidth = Math.min(width, 960);
-  const centered: object = Platform.OS === 'web'
-    ? { width: maxWidth, alignSelf: 'center' }
-    : { flex: 1 };
+  // Largeur 100 % plafonnée à 960 et centrée — sur natif comme web.
+  // ⚠️ NE PAS utiliser flex:1 (effondre la hauteur dans un parent auto-height)
+  // ni width:maxWidth seul (si la mesure vaut 0 au 1er rendu, tout s'effondre).
+  const centered: object = { width: '100%', maxWidth: 960, alignSelf: 'center' };
 
   const stack = (
     <Stack
@@ -228,6 +228,8 @@ const styles = StyleSheet.create({
   },
   navTrack: {
     flexDirection: 'row',
+    alignSelf: 'stretch',
+    width: '100%',
     backgroundColor: colors.canvas,
     borderRadius: radius.pill,
     padding: 4,
