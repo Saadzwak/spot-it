@@ -1,8 +1,9 @@
 // ============================================================================
-// Dashboard — KPI tiles + bar chart + Top offres
+// Dashboard — KPIs riches + variation vs période précédente + sélecteur 7j/30j
+// + graphe barres (Views) + entonnoir de conversion. Skeletons, UI optimiste.
 // ============================================================================
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -12,111 +13,57 @@ import {
   Platform,
 } from 'react-native';
 import { colors, radius, shadows } from '@/design/tokens';
-import { font, text } from '@/design/theme';
-import { Card, SectionTitle, BrandAvatar } from '@/components';
-import { useStoreKpis, useOfferStats, useOfferLookup } from '@/merchant/useMerchantData';
-import { MOCK_DAILY_IMPRESSIONS, calcRoiMultiplier } from '@/merchant/mock';
+import { font } from '@/design/theme';
+import { Card, SectionTitle } from '@/components';
+import {
+  KpiCard,
+  BarChart,
+  Funnel,
+  Segmented,
+  Skeleton,
+} from '@/merchant/components';
+import { useStoreKpis } from '@/merchant/useMerchantData';
+import { calcRoiMultiplier, dailySeriesFor, type Period } from '@/merchant/mock';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + ' M';
-  if (n >= 1_000)     return (n / 1_000).toFixed(1) + ' k';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + ' M';
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + ' k';
   return String(n);
 }
 
 function fmtEuros(cents: number): string {
   const euros = cents / 100;
-  if (euros >= 1000) return (euros / 1000).toFixed(1) + ' k€';
-  return euros.toFixed(0) + ' €';
+  if (euros >= 1000) return (euros / 1000).toFixed(1) + ' k€';
+  return euros.toFixed(0) + ' €';
 }
 
-// ── KPI tile ─────────────────────────────────────────────────────────────────
-
-function KpiTile({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}): React.ReactElement {
-  return (
-    <View style={[styles.kpiTile, accent && styles.kpiTileAccent]}>
-      <Text style={[styles.kpiValue, accent && styles.kpiValueAccent]}>{value}</Text>
-      <Text style={[styles.kpiLabel, accent && styles.kpiLabelAccent]}>{label}</Text>
-    </View>
-  );
+function delta(cur: number, prev: number | undefined): number | undefined {
+  if (prev === undefined || prev === 0) return undefined;
+  return (cur - prev) / prev;
 }
 
-// ── Bar chart (pure View, no dependency) ─────────────────────────────────────
-
-function BarChart({
-  data,
-}: {
-  data: { label: string; value: number }[];
-}): React.ReactElement {
-  const max = Math.max(...data.map((d) => d.value), 1);
-
-  return (
-    <View style={styles.chartWrap}>
-      {data.map((d) => {
-        const pct = d.value / max;
-        return (
-          <View key={d.label} style={styles.barCol}>
-            <View style={styles.barTrack}>
-              <View style={[styles.barFill, { height: `${Math.round(pct * 100)}%` as unknown as number }]} />
-            </View>
-            <Text style={styles.barLabel}>{d.label}</Text>
-            <Text style={styles.barValue}>{fmt(d.value)}</Text>
-          </View>
-        );
-      })}
-    </View>
-  );
+function roiPct(spendCents: number, revenueCents: number): number {
+  if (spendCents <= 0) return 0;
+  return Math.round(((revenueCents - spendCents) / spendCents) * 100);
 }
 
-// ── AcceptRate bar ────────────────────────────────────────────────────────────
-
-function AcceptBar({ rate }: { rate: number }): React.ReactElement {
-  return (
-    <View style={styles.acceptTrack}>
-      <View style={[styles.acceptFill, { width: `${Math.round(rate * 100)}%` as unknown as number }]} />
-    </View>
-  );
-}
+const PERIOD_OPTIONS: { label: string; value: Period }[] = [
+  { label: '7 jours', value: '7j' },
+  { label: '30 jours', value: '30j' },
+];
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function Dashboard(): React.ReactElement {
-  const { kpis, loading } = useStoreKpis();
-  const { stats } = useOfferStats();
-  const offerLookup = useOfferLookup();
+  const [period, setPeriod] = useState<Period>('7j');
+  const { kpis, prev, loading, live } = useStoreKpis(period);
   const { width } = useWindowDimensions();
   const maxWidth = Math.min(width, 960);
-  const centered: object = Platform.OS === 'web' ? { width: maxWidth, alignSelf: 'center' } : {};
+  const centered: object = { width: '100%', maxWidth: 960, alignSelf: 'center' };
 
-  const roi = useMemo(() => {
-    if (!kpis) return 0;
-    return calcRoiMultiplier(kpis.spendCents, kpis.revenueCents);
-  }, [kpis]);
-
-  // Top 5 offers by accept rate
-  const topStats = useMemo(
-    () => [...stats].sort((a, b) => b.acceptRate - a.acceptRate).slice(0, 5),
-    [stats],
-  );
-
-  if (loading && !kpis) {
-    return (
-      <View style={styles.center}>
-        <Text style={text.caption}>Chargement…</Text>
-      </View>
-    );
-  }
-
-  const k = kpis!;
+  const series = useMemo(() => dailySeriesFor(period), [period]);
 
   return (
     <ScrollView
@@ -124,41 +71,50 @@ export default function Dashboard(): React.ReactElement {
       contentContainerStyle={[styles.content, centered]}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── KPI grid ──────────────────────────────────────────────────────── */}
-      <SectionTitle style={styles.sectionGap}>Performances</SectionTitle>
-      <View style={styles.kpiGrid}>
-        <KpiTile label="Impressions"  value={fmt(k.impressions)} />
-        <KpiTile label="Clics"        value={fmt(k.clicks)} />
-        <KpiTile label="Visites"      value={fmt(k.visits)} />
-        <KpiTile label="Conversions"  value={fmt(k.conversions)} />
-        <KpiTile label="ROI ×"        value={roi.toFixed(1) + '×'} accent />
-        <KpiTile label="Dépense"      value={fmtEuros(k.spendCents)} />
+      {/* ── Header : titre + sélecteur période ────────────────────────────── */}
+      <View style={styles.headRow}>
+        <View>
+          <Text style={styles.h1}>Performances</Text>
+          <Text style={styles.sub}>
+            {live ? 'Données temps réel' : 'Données de démonstration'}
+          </Text>
+        </View>
+        <Segmented options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
       </View>
 
-      {/* ── Weekly impressions chart ──────────────────────────────────────── */}
-      <SectionTitle style={styles.sectionGap}>Impressions (7 jours)</SectionTitle>
+      {loading && !kpis ? (
+        <KpiGridSkeleton />
+      ) : (
+        <KpiGrid kpis={kpis!} prev={prev} />
+      )}
+
+      {/* ── Graphe impressions ─────────────────────────────────────────────── */}
+      <SectionTitle style={styles.sectionGap}>
+        Impressions · {period === '7j' ? '7 derniers jours' : '30 derniers jours'}
+      </SectionTitle>
       <Card style={styles.chartCard}>
-        <BarChart data={MOCK_DAILY_IMPRESSIONS} />
+        {loading && !kpis ? (
+          <Skeleton height={150} radius={12} />
+        ) : (
+          <BarChart data={series} height={150} />
+        )}
       </Card>
 
-      {/* ── Top offres ────────────────────────────────────────────────────── */}
-      <SectionTitle style={styles.sectionGap}>Top offres</SectionTitle>
-      <Card style={styles.listCard}>
-        {topStats.map((stat, idx) => {
-          const offer = offerLookup.get(stat.offerId);
-          if (!offer) return null;
-          return (
-            <View key={stat.offerId} style={[styles.offerRow, idx > 0 && styles.offerRowBorder]}>
-              <BrandAvatar offer={offer} size={40} />
-              <View style={styles.offerMeta}>
-                <Text style={styles.offerBrand} numberOfLines={1}>{offer.brand}</Text>
-                <Text style={styles.offerTitle} numberOfLines={1}>{offer.title}</Text>
-                <AcceptBar rate={stat.acceptRate} />
-              </View>
-              <Text style={styles.offerRate}>{Math.round(stat.acceptRate * 100)}%</Text>
-            </View>
-          );
-        })}
+      {/* ── Entonnoir de conversion ────────────────────────────────────────── */}
+      <SectionTitle style={styles.sectionGap}>Entonnoir de conversion</SectionTitle>
+      <Card style={styles.funnelCard}>
+        {loading && !kpis ? (
+          <Skeleton height={180} radius={12} />
+        ) : (
+          <Funnel
+            steps={[
+              { label: 'Impressions', value: kpis!.impressions },
+              { label: 'Clics',       value: kpis!.clicks },
+              { label: 'Visites',     value: kpis!.visits },
+              { label: 'Achats',      value: kpis!.conversions },
+            ]}
+          />
+        )}
       </Card>
 
       <View style={{ height: 32 }} />
@@ -166,151 +122,79 @@ export default function Dashboard(): React.ReactElement {
   );
 }
 
+// ── KPI grid ───────────────────────────────────────────────────────────────────
+
+function KpiGrid({ kpis: k, prev }: { kpis: NonNullable<ReturnType<typeof useStoreKpis>['kpis']>; prev: ReturnType<typeof useStoreKpis>['prev'] }): React.ReactElement {
+  const roi = roiPct(k.spendCents, k.revenueCents);
+  const prevRoi = prev ? roiPct(prev.spendCents, prev.revenueCents) : undefined;
+
+  return (
+    <View style={styles.kpiGrid}>
+      <KpiCard index={0} label="Impressions" value={fmt(k.impressions)} deltaPct={delta(k.impressions, prev?.impressions)} />
+      <KpiCard index={1} label="Clics"       value={fmt(k.clicks)}      deltaPct={delta(k.clicks, prev?.clicks)} />
+      <KpiCard index={2} label="Visites"     value={fmt(k.visits)}      deltaPct={delta(k.visits, prev?.visits)} />
+      <KpiCard index={3} label="Conversions" value={fmt(k.conversions)} deltaPct={delta(k.conversions, prev?.conversions)} />
+      <KpiCard index={4} label="Chiffre d’affaires" value={fmtEuros(k.revenueCents)} deltaPct={delta(k.revenueCents, prev?.revenueCents)} />
+      <KpiCard index={5} label="Dépense"     value={fmtEuros(k.spendCents)} deltaPct={delta(k.spendCents, prev?.spendCents)} goodWhenUp={false} />
+      <KpiCard
+        index={6}
+        label={`ROI · ${calcRoiMultiplier(k.spendCents, k.revenueCents)}× retour`}
+        value={`${roi} %`}
+        deltaPct={delta(roi, prevRoi)}
+        accent
+      />
+    </View>
+  );
+}
+
+function KpiGridSkeleton(): React.ReactElement {
+  return (
+    <View style={styles.kpiGrid}>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <View key={i} style={styles.kpiSkeletonTile}>
+          <Skeleton width="60%" height={26} radius={8} />
+          <View style={{ height: 10 }} />
+          <Skeleton width="40%" height={12} radius={6} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: colors.canvas,
-  },
-  content: {
-    padding: 16,
-    paddingTop: 20,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionGap: {
-    marginTop: 20,
-    marginBottom: 12,
-  },
-  // ── KPI grid ──
-  kpiGrid: {
+  scroll: { flex: 1, backgroundColor: colors.canvas },
+  content: { padding: 16, paddingTop: 20 },
+  headRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
+    marginBottom: 20,
   },
-  kpiTile: {
+  h1: {
+    fontFamily: font.displayBold,
+    fontSize: 30,
+    fontWeight: '700',
+    letterSpacing: -0.7,
+    color: colors.ink,
+  },
+  sub: {
+    fontFamily: font.body,
+    fontSize: 13,
+    color: colors.ink3,
+    marginTop: 2,
+  },
+  sectionGap: { marginTop: 28, marginBottom: 12 },
+  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  kpiSkeletonTile: {
     flex: 1,
-    minWidth: 130,
+    minWidth: 140,
     backgroundColor: colors.surface,
     borderRadius: radius.card,
     padding: 16,
     ...shadows.sm,
   },
-  kpiTileAccent: {
-    backgroundColor: colors.accent,
-  },
-  kpiValue: {
-    fontFamily: font.displayBold,
-    fontSize: 26,
-    fontWeight: '700',
-    letterSpacing: -0.6,
-    color: colors.ink,
-    marginBottom: 4,
-  },
-  kpiValueAccent: {
-    color: colors.white,
-  },
-  kpiLabel: {
-    fontFamily: font.body,
-    fontSize: 12,
-    color: colors.ink3,
-  },
-  kpiLabelAccent: {
-    color: 'rgba(255,255,255,0.75)',
-  },
-  // ── Bar chart ──
-  chartCard: {
-    padding: 16,
-    paddingBottom: 8,
-  },
-  chartWrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    height: 120,
-  },
-  barCol: {
-    flex: 1,
-    alignItems: 'center',
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  barTrack: {
-    width: '100%',
-    flex: 1,
-    backgroundColor: colors.canvas,
-    borderRadius: 6,
-    overflow: 'hidden',
-    justifyContent: 'flex-end',
-    marginBottom: 4,
-  },
-  barFill: {
-    width: '100%',
-    backgroundColor: colors.accent,
-    borderRadius: 6,
-    minHeight: 4,
-  },
-  barLabel: {
-    fontFamily: font.body,
-    fontSize: 10,
-    color: colors.ink3,
-    marginTop: 2,
-  },
-  barValue: {
-    fontFamily: font.bodySemiBold,
-    fontSize: 10,
-    color: colors.ink2,
-  },
-  // ── Top offres list ──
-  listCard: {
-    paddingVertical: 4,
-  },
-  offerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  offerRowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-  },
-  offerMeta: {
-    flex: 1,
-    gap: 3,
-  },
-  offerBrand: {
-    fontFamily: font.bodySemiBold,
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.ink,
-  },
-  offerTitle: {
-    fontFamily: font.body,
-    fontSize: 12,
-    color: colors.ink3,
-  },
-  acceptTrack: {
-    height: 4,
-    backgroundColor: colors.canvas,
-    borderRadius: 2,
-    marginTop: 2,
-    overflow: 'hidden',
-  },
-  acceptFill: {
-    height: '100%',
-    backgroundColor: colors.accent,
-    borderRadius: 2,
-  },
-  offerRate: {
-    fontFamily: font.bodySemiBold,
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.ink2,
-    minWidth: 36,
-    textAlign: 'right',
-  },
+  chartCard: { padding: 16, paddingBottom: 12 },
+  funnelCard: { padding: 18 },
 });

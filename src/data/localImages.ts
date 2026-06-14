@@ -29,8 +29,13 @@ const MODULES: Record<string, number> = {
 };
 
 function toUri(m: number): string {
-  const s = Image.resolveAssetSource(m);
-  return s?.uri ?? '';
+  // resolveAssetSource n'existe pas pendant le prerender web (SSR Node) : on
+  // renvoie '' au build, et la vraie URI est calculée côté client (mobile/web).
+  try {
+    const fn = (Image as unknown as { resolveAssetSource?: (x: number) => { uri?: string } | undefined }).resolveAssetSource;
+    if (typeof fn === 'function') return fn(m)?.uri ?? '';
+  } catch { /* SSR / prerender */ }
+  return '';
 }
 
 /** URI résolue par slug. Vide si la clé est inconnue. */
