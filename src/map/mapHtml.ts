@@ -42,6 +42,7 @@ export function buildMapHtml(opts: {
   var CENTER = ${JSON.stringify([center.lng, center.lat])};
   var pins = {};
   var userMarker = null;
+  var lastRouteCoords = null;
   function post(o){ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify(o)); } }
   var map = new mapboxgl.Map({ container:'map', style:${JSON.stringify(style)}, center:CENTER, zoom:14.4, pitch:0, bearing:0, attributionControl:false });
 
@@ -79,6 +80,7 @@ export function buildMapHtml(opts: {
     fetch(url).then(function(r){return r.json();}).then(function(d){
       if(!d.routes||!d.routes[0]){ post({type:'eta', offerId:offerId, error:'no_route'}); return; }
       var route = d.routes[0];
+      lastRouteCoords = (route.geometry && route.geometry.coordinates) || null;
       var gj = { type:'Feature', geometry: route.geometry };
       if(map.getSource('route')){ map.getSource('route').setData(gj); }
       else {
@@ -108,10 +110,19 @@ export function buildMapHtml(opts: {
     map.easeTo({ center:CENTER, duration:600 });
   }
 
+  // Vue d'ensemble : cadre TOUT le tracé pour qu'il soit visible sur la carte
+  // (façon Google Maps), en gardant de la place en bas pour le panneau d'étapes.
+  function fitRoute(){
+    if(!lastRouteCoords || !lastRouteCoords.length) return;
+    var b = lastRouteCoords.reduce(function(bb,c){ return bb.extend(c); }, new mapboxgl.LngLatBounds(lastRouteCoords[0], lastRouteCoords[0]));
+    map.fitBounds(b, { padding:{ top:90, bottom:360, left:50, right:50 }, duration:700, maxZoom:16.5 });
+  }
+
   function onRN(e){ try { var d=JSON.parse(e.data);
     if(d.type==='route'){ drawRoute(d.lng, d.lat, d.offerId); }
     else if(d.type==='clearRoute'){ clearRoute(); }
     else if(d.type==='recenter'){ recenter(d.lng, d.lat); }
+    else if(d.type==='fitRoute'){ fitRoute(); }
     else if(d.type==='flyTo'){ map.flyTo({ center:[d.lng,d.lat], zoom:15 }); }
   } catch(_){} }
   document.addEventListener('message', onRN); window.addEventListener('message', onRN);

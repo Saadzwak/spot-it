@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   etaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
   eta: { fontFamily: font.bodySemiBold, fontSize: 14, color: colors.ink2 },
   close: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.canvas, alignItems: 'center', justifyContent: 'center' },
-  scroll: { maxHeight: 320, marginTop: 12 },
+  scroll: { maxHeight: 210, marginTop: 10 },
   row: { flexDirection: 'row', gap: 12 },
   rail: { width: 16, alignItems: 'center' },
   dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.accent, marginTop: 3 },

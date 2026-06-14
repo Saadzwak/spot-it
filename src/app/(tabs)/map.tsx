@@ -41,6 +41,7 @@ export default function MapScreen() {
   const [eta, setEta] = useState<MapEta | null>(null);
   const [showNotif, setShowNotif] = useState(false);
   const [showItinerary, setShowItinerary] = useState(false);
+  const [overviewTick, setOverviewTick] = useState(0);
   const routeFromParam = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -88,6 +89,9 @@ export default function MapScreen() {
   };
   const laterNotif = () => { setShowNotif(false); markNotifPrompt(); track('notif_prompt', { action: 'later' }); };
 
+  // Demande explicite d'itinéraire → cadre tout le tracé sur la carte + étapes.
+  const requestItinerary = () => { setOverviewTick((t) => t + 1); setShowItinerary(true); };
+
   const empty = matchedIds != null && ranked.length === 0;
   const carouselTitle = `Top ${ranked.length} pour toi`;
 
@@ -103,11 +107,12 @@ export default function MapScreen() {
           offers={ranked}
           center={userLoc ?? DEMO_USER}
           routeTo={routeTo}
+          overviewSignal={overviewTick}
           onSelectOffer={(id) => select(id)}
           onEta={(e) => {
             setEta(e);
-            // ouvre l'itinéraire détaillé si l'utilisateur l'a demandé depuis l'offre
-            if (e && !e.error && e.steps && e.steps.length && routeFromParam.current) { routeFromParam.current = false; setShowItinerary(true); }
+            // l'utilisateur a demandé l'itinéraire depuis l'offre → vue d'ensemble + étapes
+            if (e && !e.error && routeFromParam.current) { routeFromParam.current = false; setOverviewTick((t) => t + 1); setShowItinerary(true); }
           }}
         />
 
@@ -139,7 +144,7 @@ export default function MapScreen() {
             <Text style={styles.etaBrand} numberOfLines={1}>{selected.brand}</Text>
             <Text style={styles.etaInfo}>{eta.durationMin} min à pied · {eta.distanceM} m</Text>
           </View>
-          <Pressable style={styles.etaGo} onPress={() => setShowItinerary(true)}>
+          <Pressable style={styles.etaGo} onPress={requestItinerary}>
             <Text style={styles.etaGoTxt}>Itinéraire</Text>
           </Pressable>
           <Pressable hitSlop={10} onPress={() => select(null)} style={styles.etaClose}>

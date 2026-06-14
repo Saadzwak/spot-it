@@ -29,11 +29,12 @@ export interface MapWebViewProps {
   offers: Offer[];
   center?: { lat: number; lng: number };
   routeTo?: { id: string; lat: number; lng: number } | null;
+  overviewSignal?: number; // incrémenter pour cadrer TOUT le tracé (vue d'ensemble)
   onSelectOffer?: (offerId: string) => void;
   onEta?: (e: MapEta) => void;
 }
 
-export function MapWebView({ offers, center = DEMO_USER, routeTo, onSelectOffer, onEta }: MapWebViewProps) {
+export function MapWebView({ offers, center = DEMO_USER, routeTo, overviewSignal, onSelectOffer, onEta }: MapWebViewProps) {
   const ref = useRef<WebView>(null);
   const ready = useRef(false);
   // On NE reconstruit le HTML que si les marqueurs changent (pas à chaque jitter
@@ -61,6 +62,12 @@ export function MapWebView({ offers, center = DEMO_USER, routeTo, onSelectOffer,
     ref.current?.postMessage(JSON.stringify({ type: 'recenter', lng: center.lng, lat: center.lat }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centerKey]);
+
+  // Vue d'ensemble du tracé (déclenchée quand l'utilisateur demande l'itinéraire).
+  useEffect(() => {
+    if (ready.current && overviewSignal) ref.current?.postMessage(JSON.stringify({ type: 'fitRoute' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overviewSignal]);
 
   if (!hasMapbox()) {
     return (
