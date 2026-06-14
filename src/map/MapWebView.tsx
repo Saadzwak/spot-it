@@ -23,7 +23,8 @@ function toMarkers(offers: Offer[]): MapMarker[] {
     }));
 }
 
-export interface MapEta { offerId: string; durationMin?: number; distanceM?: number; error?: string }
+export interface RouteStep { instruction: string; distanceM: number; type?: string; modifier?: string; name?: string }
+export interface MapEta { offerId: string; durationMin?: number; distanceM?: number; error?: string; steps?: RouteStep[] }
 export interface MapWebViewProps {
   offers: Offer[];
   center?: { lat: number; lng: number };

@@ -64,14 +64,11 @@ export default function OfferDetail() {
       <View style={styles.cta}>
         <View style={{ flex: 1 }}>
           <PrimaryButton
-            label="En profiter"
-            onPress={() => { track('offer_redeem_intent', { offerId: offer.id }); router.push({ pathname: '/redeem/[id]', params: { id: offer.id } }); }}
-            icon={<Icon name="check" size={18} color="#fff" />}
+            label="Itinéraire"
+            onPress={() => { track('itinerary_open', { offerId: offer.id }); router.push({ pathname: '/(tabs)/map', params: { route: offer.id } }); }}
+            icon={<Icon name="nav" size={18} color="#fff" />}
           />
         </View>
-        <Pressable style={styles.mapBtn} onPress={() => { track('itinerary_open', { offerId: offer.id }); router.push({ pathname: '/(tabs)/map', params: { route: offer.id } }); }} accessibilityLabel="Itinéraire">
-          <Icon name="nav" size={22} color={colors.ink} />
-        </Pressable>
         <Pressable style={styles.mapBtn} onPress={() => toggleWishlist(offer.id)} accessibilityLabel="Wishlist">
           <Icon name={saved ? 'heartFill' : 'heart'} size={22} color={saved ? colors.accent : colors.ink} />
         </Pressable>

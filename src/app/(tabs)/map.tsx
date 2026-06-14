@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Screen, SpotLogo, Icon, NotifPermissionModal } from '@/components';
+import { Screen, SpotLogo, Icon, NotifPermissionModal, ItinerarySheet } from '@/components';
 import { colors, font, shadows, radius, text } from '@/design/theme';
 import { useStore } from '@/store/useStore';
 import { rankOffers } from '@/learning/features';
@@ -40,11 +40,13 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [eta, setEta] = useState<MapEta | null>(null);
   const [showNotif, setShowNotif] = useState(false);
+  const [showItinerary, setShowItinerary] = useState(false);
+  const routeFromParam = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const select = (id: string | null) => { setSelectedId(id); setEta(null); if (id) track('offer_select', { offerId: id }); };
 
-  useEffect(() => { if (params.route) select(String(params.route)); }, [params.route]);
+  useEffect(() => { if (params.route) { select(String(params.route)); routeFromParam.current = true; } }, [params.route]);
   // nettoie une sélection devenue hors-filtre, sans écraser un itinéraire demandé
   useEffect(() => {
     if (!params.route && selectedId && matchedIds && !matchedIds.includes(selectedId)) select(null);
@@ -102,7 +104,11 @@ export default function MapScreen() {
           center={userLoc ?? DEMO_USER}
           routeTo={routeTo}
           onSelectOffer={(id) => select(id)}
-          onEta={(e) => setEta(e)}
+          onEta={(e) => {
+            setEta(e);
+            // ouvre l'itinéraire détaillé si l'utilisateur l'a demandé depuis l'offre
+            if (e && !e.error && e.steps && e.steps.length && routeFromParam.current) { routeFromParam.current = false; setShowItinerary(true); }
+          }}
         />
 
         <Pressable style={styles.arBtn} onPress={() => router.push('/ar')}>
@@ -133,8 +139,8 @@ export default function MapScreen() {
             <Text style={styles.etaBrand} numberOfLines={1}>{selected.brand}</Text>
             <Text style={styles.etaInfo}>{eta.durationMin} min à pied · {eta.distanceM} m</Text>
           </View>
-          <Pressable style={styles.etaGo} onPress={() => router.push({ pathname: '/offer/[id]', params: { id: selected.id } })}>
-            <Text style={styles.etaGoTxt}>Voir l'offre</Text>
+          <Pressable style={styles.etaGo} onPress={() => setShowItinerary(true)}>
+            <Text style={styles.etaGoTxt}>Itinéraire</Text>
           </Pressable>
           <Pressable hitSlop={10} onPress={() => select(null)} style={styles.etaClose}>
             <Icon name="close" size={18} color={colors.ink2} />
@@ -165,6 +171,16 @@ export default function MapScreen() {
       ) : null}
 
       <NotifPermissionModal visible={showNotif} onEnable={enableNotif} onLater={laterNotif} />
+      <ItinerarySheet
+        visible={showItinerary && !!selected}
+        brand={selected?.brand}
+        image={selected?.image}
+        durationMin={eta?.durationMin}
+        distanceM={eta?.distanceM}
+        steps={eta?.steps}
+        onClose={() => setShowItinerary(false)}
+        onSeeOffer={selected ? () => { setShowItinerary(false); router.push({ pathname: '/offer/[id]', params: { id: selected.id } }); } : undefined}
+      />
     </Screen>
   );
 }

@@ -45,6 +45,9 @@ export { MagicLoader, default as MagicLoaderDefault } from './MagicLoader';
 // Pop-up permission notifs de proximité
 export { NotifPermissionModal, default as NotifPermissionModalDefault } from './NotifPermissionModal';
 
+// Itinéraire détaillé (turn-by-turn façon Google Maps)
+export { ItinerarySheet, default as ItinerarySheetDefault } from './ItinerarySheet';
+
 // Primitives
 export {
   Screen,

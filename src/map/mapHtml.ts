@@ -75,7 +75,7 @@ export function buildMapHtml(opts: {
   function drawRoute(lng, lat, offerId){
     highlight(offerId);
     var url = 'https://api.mapbox.com/directions/v5/mapbox/walking/'+CENTER[0]+','+CENTER[1]+';'+lng+','+lat+
-      '?geometries=geojson&overview=full&access_token='+mapboxgl.accessToken;
+      '?geometries=geojson&overview=full&steps=true&language=fr&access_token='+mapboxgl.accessToken;
     fetch(url).then(function(r){return r.json();}).then(function(d){
       if(!d.routes||!d.routes[0]){ post({type:'eta', offerId:offerId, error:'no_route'}); return; }
       var route = d.routes[0];
@@ -88,7 +88,13 @@ export function buildMapHtml(opts: {
       }
       // zoome SUR l'offre sélectionnée (et non dézoomer pour tout englober)
       map.flyTo({ center:[lng,lat], zoom: 16, duration: 800, padding:{ top:40, bottom:240, left:40, right:40 } });
-      post({ type:'eta', offerId:offerId, durationMin: Math.max(1, Math.round(route.duration/60)), distanceM: Math.round(route.distance) });
+      // étapes turn-by-turn (façon Google Maps) pour l'itinéraire détaillé
+      var steps = [];
+      try { (route.legs||[]).forEach(function(leg){ (leg.steps||[]).forEach(function(st){
+        var m = st.maneuver || {};
+        steps.push({ instruction: m.instruction || st.name || '', distanceM: Math.round(st.distance||0), type: m.type||'', modifier: m.modifier||'', name: st.name||'' });
+      }); }); } catch(e){}
+      post({ type:'eta', offerId:offerId, durationMin: Math.max(1, Math.round(route.duration/60)), distanceM: Math.round(route.distance), steps: steps });
     }).catch(function(){ post({type:'eta', offerId:offerId, error:'fetch'}); });
   }
   function clearRoute(){ highlight(null); if(map.getLayer('route-line')){ map.removeLayer('route-line'); } if(map.getLayer('route-casing')){ map.removeLayer('route-casing'); } if(map.getSource('route')){ map.removeSource('route'); } }
