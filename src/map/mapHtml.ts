@@ -58,7 +58,9 @@ export function buildMapHtml(opts: {
       if(o.lat==null||o.lng==null) return;
       var el = document.createElement('div'); el.className='pin'+(o.sponsored?' sp':'');
       el.style.background = o.color || '#C75B43';
-      if(o.image){ var im=document.createElement('img'); im.src=o.image; im.referrerPolicy='no-referrer'; el.appendChild(im); }
+      if(o.image){ var im=document.createElement('img'); im.referrerPolicy='no-referrer';
+        im.onerror=function(){ try{ el.removeChild(im); }catch(e){} el.textContent=o.initials||''; }; // repli initiales si la photo ne charge pas
+        im.src=o.image; el.appendChild(im); }
       else { el.textContent = o.initials || ''; }
       el.addEventListener('click', function(){ post({ type:'select', offerId:o.id }); });
       pins[o.id]=el;

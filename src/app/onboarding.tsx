@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Linking, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
+import { ensureNotifPermission } from '@/geo/notify';
 import { Screen, SpotLogo, SpotMark, ProximityRing, PrimaryButton, GhostButton, Toggle, Icon } from '@/components';
 import { colors, radius, font, text, shadows } from '@/design/theme';
 import { useStore } from '@/store/useStore';
@@ -40,6 +41,7 @@ export default function Onboarding() {
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       } catch { /* on garde, finish quand même */ }
+      void ensureNotifPermission(); // active les notifs de proximité passives dès maintenant
       finish(true);
     } catch {
       setLocStatus('denied');
