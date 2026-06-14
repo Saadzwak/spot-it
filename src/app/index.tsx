@@ -1,4 +1,4 @@
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, Link, type Href } from 'expo-router';
 import { Platform, View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '@/store/useStore';
@@ -19,12 +19,11 @@ export default function Index() {
 }
 
 function WebChoice({ onboarded }: { onboarded: boolean }) {
-  const router = useRouter();
   const { width } = useWindowDimensions();
   const row = width >= 720;
 
-  const goShopper = () => router.replace(onboarded ? '/(tabs)/discover' : '/onboarding');
-  const goMerchant = () => router.replace('/(merchant)/dashboard');
+  const shopperHref = (onboarded ? '/(tabs)/discover' : '/onboarding') as Href;
+  const merchantHref = '/(merchant)/dashboard' as Href;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -35,19 +34,19 @@ function WebChoice({ onboarded }: { onboarded: boolean }) {
 
         <View style={[styles.cards, row && styles.cardsRow]}>
           <ChoiceCard
+            href={shopperHref}
             icon="profile"
             title="Découvrir les offres"
             desc="Côté shopper — swipe, carte, alertes de proximité."
             cta="Entrer"
-            onPress={goShopper}
           />
           <ChoiceCard
+            href={merchantHref}
             icon="sliders"
             title="Espace magasin"
             desc="Tableau de bord, audience, catalogue et campagnes."
             cta="Gérer ma boutique"
             accent
-            onPress={goMerchant}
           />
         </View>
       </View>
@@ -56,30 +55,30 @@ function WebChoice({ onboarded }: { onboarded: boolean }) {
 }
 
 function ChoiceCard({
-  icon, title, desc, cta, accent, onPress,
+  href, icon, title, desc, cta, accent,
 }: {
+  href: Href;
   icon: 'profile' | 'sliders';
   title: string;
   desc: string;
   cta: string;
   accent?: boolean;
-  onPress: () => void;
 }) {
+  // Link → vrai <a href> sur web (clic/navigation fiables), onPress sur natif.
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-    >
-      <View style={[styles.iconWrap, accent && styles.iconWrapAccent]}>
-        <Icon name={icon} size={22} color={accent ? colors.white : colors.ink} />
-      </View>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.cardDesc}>{desc}</Text>
-      <View style={[styles.cardCta, accent && styles.cardCtaAccent]}>
-        <Text style={[styles.cardCtaLabel, accent && styles.cardCtaLabelAccent]}>{cta}</Text>
-        <Icon name="chevronRight" size={16} color={accent ? colors.white : colors.ink} />
-      </View>
-    </Pressable>
+    <Link href={href} replace asChild>
+      <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
+        <View style={[styles.iconWrap, accent && styles.iconWrapAccent]}>
+          <Icon name={icon} size={22} color={accent ? colors.white : colors.ink} />
+        </View>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardDesc}>{desc}</Text>
+        <View style={[styles.cardCta, accent && styles.cardCtaAccent]}>
+          <Text style={[styles.cardCtaLabel, accent && styles.cardCtaLabelAccent]}>{cta}</Text>
+          <Icon name="chevronRight" size={16} color={accent ? colors.white : colors.ink} />
+        </View>
+      </Pressable>
+    </Link>
   );
 }
 
