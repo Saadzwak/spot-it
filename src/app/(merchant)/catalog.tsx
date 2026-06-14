@@ -180,8 +180,9 @@ export default function Catalog(): React.ReactElement {
   const centered: object = { width: '100%', maxWidth: 960, alignSelf: 'center' };
   const wide = Platform.OS === 'web' && width >= 760;
 
-  // Liste locale (optimiste) initialisée depuis le fetch.
-  const [offers, setOffers] = useState<Offer[]>([]);
+  // Liste locale (optimiste). Init synchrone depuis le fetch (mock dispo dès
+  // le 1er rendu) + re-sync si la source change (arrivée des données live).
+  const [offers, setOffers] = useState<Offer[]>(() => fetched);
   useEffect(() => { setOffers(fetched); }, [fetched]);
 
   const [activeMap, setActiveMap] = useState<Record<string, boolean>>({});

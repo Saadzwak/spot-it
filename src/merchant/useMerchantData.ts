@@ -77,24 +77,16 @@ export function useStoreKpis(period: Period = '7j'): {
   live: boolean;
 } {
   const live = hasSupabase();
-  const [kpis, setKpis] = useState<StoreKpis | null>(null);
-  const [prev, setPrev] = useState<StoreKpis | null>(null);
-  const [loading, setLoading] = useState(true);
+  // En live : KPIs réels via state + realtime. En mock : rien ici.
+  const [liveKpis, setLiveKpis] = useState<StoreKpis | null>(null);
+  const [liveLoading, setLiveLoading] = useState(live);
 
   useEffect(() => {
-    const fallback = () => {
-      setKpis(MOCK_KPIS_BY_PERIOD[period].current);
-      setPrev(MOCK_KPIS_BY_PERIOD[period].previous);
-      setLoading(false);
-    };
-
-    if (!live) { fallback(); return; }
+    if (!live) return;
     const supabase = getSupabase();
-    if (!supabase) { fallback(); return; }
+    if (!supabase) { setLiveLoading(false); return; }
 
     let mounted = true;
-    setPrev(null); // pas d'historique fiable en live → variation masquée
-
     (async () => {
       try {
         const { data, error } = await supabase
@@ -103,11 +95,10 @@ export function useStoreKpis(period: Period = '7j'): {
           .eq('store_id', DEMO_STORE_ID)
           .single();
         if (!mounted) return;
-        if (error || !data) setKpis(MOCK_KPIS_BY_PERIOD[period].current);
-        else setKpis(mapStoreKpisRow(data as StoreKpisRow));
-        setLoading(false);
+        if (!error && data) setLiveKpis(mapStoreKpisRow(data as StoreKpisRow));
+        setLiveLoading(false);
       } catch {
-        if (mounted) fallback();
+        if (mounted) setLiveLoading(false);
       }
     })();
 
@@ -118,56 +109,72 @@ export function useStoreKpis(period: Period = '7j'): {
         { event: 'UPDATE', schema: 'public', table: 'store_kpis', filter: `store_id=eq.${DEMO_STORE_ID}` },
         (payload) => {
           if (mounted && payload.new) {
-            try { setKpis(mapStoreKpisRow(payload.new as StoreKpisRow)); } catch { /* ignore */ }
+            try { setLiveKpis(mapStoreKpisRow(payload.new as StoreKpisRow)); } catch { /* ignore */ }
           }
         },
       )
       .subscribe();
 
     return () => { mounted = false; supabase.removeChannel(channel); };
-  }, [live, period]);
+  }, [live]);
 
-  return { kpis, prev, loading, live };
+  // Mode démo : données dérivées AU RENDU (aucun effet requis → jamais vide,
+  // robuste web/SSR), et la période se reflète immédiatement.
+  if (!live) {
+    const pair = MOCK_KPIS_BY_PERIOD[period];
+    return { kpis: pair.current, prev: pair.previous, loading: false, live: false };
+  }
+  // Live : fallback mock tant que la donnée réelle n'est pas arrivée (jamais vide).
+  return {
+    kpis: liveKpis ?? MOCK_KPIS_BY_PERIOD[period].current,
+    prev: null,
+    loading: liveLoading && !liveKpis,
+    live: true,
+  };
 }
 
 // ── useOfferStats ─────────────────────────────────────────────────────────────
 
 export function useOfferStats(): { stats: OfferStat[]; loading: boolean } {
-  const [stats, setStats] = useState<OfferStat[]>([]);
-  const [loading, setLoading] = useState(true);
+  const live = hasSupabase();
+  const [liveStats, setLiveStats] = useState<OfferStat[] | null>(null);
 
   useEffect(() => {
-    const supabase = hasSupabase() ? getSupabase() : null;
-    if (!supabase) { setStats(MOCK_OFFER_STATS); setLoading(false); return; }
-
+    if (!live) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
     let mounted = true;
     (async () => {
       try {
         const { data, error } = await supabase.rpc('merchant_offer_stats', { p_store_id: DEMO_STORE_ID });
         if (!mounted) return;
-        if (error || !data || (Array.isArray(data) && data.length === 0)) setStats(MOCK_OFFER_STATS);
-        else setStats((data as OfferStatRow[]).map(mapOfferStatRow));
-        setLoading(false);
+        if (!error && data && !(Array.isArray(data) && data.length === 0)) {
+          setLiveStats((data as OfferStatRow[]).map(mapOfferStatRow));
+        } else {
+          setLiveStats(MOCK_OFFER_STATS);
+        }
       } catch {
-        if (mounted) { setStats(MOCK_OFFER_STATS); setLoading(false); }
+        if (mounted) setLiveStats(MOCK_OFFER_STATS);
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [live]);
 
-  return { stats, loading };
+  // Démo : mock au rendu. Live : mock en fallback tant que la donnée n'arrive pas.
+  if (!live) return { stats: MOCK_OFFER_STATS, loading: false };
+  return { stats: liveStats ?? MOCK_OFFER_STATS, loading: liveStats === null };
 }
 
 // ── useMerchantOffers ─────────────────────────────────────────────────────────
 
 export function useMerchantOffers(): { offers: Offer[]; loading: boolean } {
-  const [offers, setOffers] = useState<Offer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const live = hasSupabase();
+  const [liveOffers, setLiveOffers] = useState<Offer[] | null>(null);
 
   useEffect(() => {
-    const supabase = hasSupabase() ? getSupabase() : null;
-    if (!supabase) { setOffers(MOCK_MERCHANT_OFFERS); setLoading(false); return; }
-
+    if (!live) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
     let mounted = true;
     (async () => {
       try {
@@ -182,7 +189,7 @@ export function useMerchantOffers(): { offers: Offer[]; loading: boolean } {
           .eq('stores.merchant_id', 'b0000000-0000-0000-0000-000000000001');
         if (!mounted) return;
         if (error || !data || data.length === 0) {
-          setOffers(MOCK_MERCHANT_OFFERS);
+          setLiveOffers(MOCK_MERCHANT_OFFERS);
         } else {
           const mapped: Offer[] = (data as Array<Record<string, unknown>>).map((row) => ({
             id:           String(row.id),
@@ -199,17 +206,17 @@ export function useMerchantOffers(): { offers: Offer[]; loading: boolean } {
             description:  row.description ? String(row.description) : undefined,
             whyTemplate:  row.why_template ? String(row.why_template) : undefined,
           }));
-          setOffers(mapped);
+          setLiveOffers(mapped);
         }
-        setLoading(false);
       } catch {
-        if (mounted) { setOffers(MOCK_MERCHANT_OFFERS); setLoading(false); }
+        if (mounted) setLiveOffers(MOCK_MERCHANT_OFFERS);
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [live]);
 
-  return { offers, loading };
+  if (!live) return { offers: MOCK_MERCHANT_OFFERS, loading: false };
+  return { offers: liveOffers ?? MOCK_MERCHANT_OFFERS, loading: liveOffers === null };
 }
 
 // ── useOfferLookup ────────────────────────────────────────────────────────────
@@ -303,12 +310,15 @@ export function useCampaigns(): {
   setStatus: (id: string, status: 'active' | 'paused') => void;
   add: (draft: { categories: Category[]; radiusM: number; budgetCents: number }) => Promise<void>;
 } {
-  const [campaigns, setCampaigns] = useState<MerchantCampaign[]>([]);
-  const [loading, setLoading] = useState(true);
+  const live = hasSupabase();
+  // Démo : liste mock dès le 1er rendu (lazy init, aucun effet requis).
+  const [campaigns, setCampaigns] = useState<MerchantCampaign[]>(() => (live ? [] : MOCK_CAMPAIGNS));
+  const [loading, setLoading] = useState(live);
 
   useEffect(() => {
-    const supabase = hasSupabase() ? getSupabase() : null;
-    if (!supabase) { setCampaigns(MOCK_CAMPAIGNS); setLoading(false); return; }
+    if (!live) return;
+    const supabase = getSupabase();
+    if (!supabase) { setLoading(false); return; }
 
     let mounted = true;
     (async () => {
@@ -334,7 +344,7 @@ export function useCampaigns(): {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [live]);
 
   const setStatus = useCallback((id: string, status: 'active' | 'paused') => {
     setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c))); // optimiste
