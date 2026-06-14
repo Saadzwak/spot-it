@@ -43,7 +43,13 @@ export default function DiscoverScreen() {
     setPhase('curating');
     const { picks, summary } = buildIntentPicks(intent, finalAnswers);
     applyIntent(picks, summary);
-    const res = await curateOffers(intent.trim(), finalAnswers, offers);
+    // Écran de chargement TOUJOURS visible (min ~1,9 s) même si la curation est
+    // instantanée (cas fête des pères déterministe) → on voit "que ça tourne".
+    const minLoader = new Promise<void>((r) => setTimeout(r, 1900));
+    const [res] = await Promise.all([
+      curateOffers(intent.trim(), finalAnswers, offers),
+      minLoader,
+    ]);
     track('curate', { count: res.offerIds.length, intent: intent.trim() });
     setMatched(res.offerIds, res.headline);
     goMap();
