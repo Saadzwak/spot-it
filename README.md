@@ -1,55 +1,70 @@
 # Spot.it — repère les meilleures offres autour de toi
 
-Plateforme **retail media** double-face (hackathon 24h) :
-- **Shopper** — déclare une intention, découvre des offres perso par **swipe** + **carte**, reçoit une alerte de **proximité** (~5 min / 400 m d'un magasin partenaire).
-- **Magasin** (qui paie) — profil enseigne, catalogue, ciblage, **KPIs temps réel**.
+Plateforme **retail media** double-face :
+- **Shopper** — déclare une intention, l'IA pose 2 questions, puis découvre des offres perso sur une **carte** ; **itinéraire à pied qui suit ta position en temps réel** ; alerte de **proximité** (~400 m d'un magasin partenaire) ; **vue AR**.
+- **Magasin** (qui paie) — **dashboard web** : KPIs, dépense (forfait + sponsoring), catalogue → fiche produit, ciblage → campagnes.
 
-Cerveau **multi-agents (API Claude)** + **boucle d'apprentissage en ligne** : chaque swipe met à jour un profil de goûts ; après ~5 swipes, le deck change visiblement. Consentement **RGPD** au centre (partage OFF par défaut).
+Cerveau **multi-agents (API Claude)** : questions de suivi + agent de curation. Boucle d'apprentissage en ligne sur les swipes. Consentement **RGPD** au centre (partage OFF par défaut).
 
 ## Stack
 
-- **Expo SDK 56** (RN 0.85, React 19) + **expo-router** — testé dans **Expo Go**
-- Carte : **Mapbox GL JS v3 dans react-native-webview** (clé `pk.` only)
-- Géo : `expo-location` (avant-plan) · Notifs : `expo-notifications` (locales)
-- État : **zustand** · Backend : **Supabase** (PostGIS, RLS, Edge Functions)
-- Cerveau : **API Claude** côté serveur (`claude-haiku-4-5` / `claude-sonnet-4-6`)
+- **Expo SDK 54** (React Native 0.81.5, React 19.1) + **expo-router** — testé dans **Expo Go**
+- Carte : **Mapbox GL JS v3 dans `react-native-webview`** (token `pk.` public uniquement)
+- Géo : `expo-location` · Notifs locales : `expo-notifications` · Caméra (AR) : `expo-camera`
+- État : **zustand v4** (⚠️ v4 volontaire + `metro.config.js` force zustand → build CJS sur web pour éviter l'erreur `import.meta`)
+- Cerveau : **API Claude** via **Expo Router API routes** (`src/app/api/*+api.ts`, clé lue côté serveur dans `process.env`, jamais bundlée) — `claude-haiku-4-5`
+- Backend : **Supabase** (PostGIS, RLS, Edge Functions)
 
-## Démarrer (M0 — zéro clé requise)
+## Démarrer
 
 ```bash
-npm install
-npx expo start            # scanne le QR avec Expo Go (Android conseillé)
+npm install --legacy-peer-deps      # le flag est REQUIS (résout les peer deps)
+cp .env.example .env                 # Windows : copy .env.example .env  → puis remplis les clés
+npx expo start --tunnel              # mobile : scanne le QR avec Expo Go
+# (pour le tunnel : npm install -g @expo/ngrok si demandé)
 ```
 
-M0 tourne **100% en local** (seed `src/data/offers.seed.ts`, bandit client, carte en fallback si pas de token). Pour activer la carte + le backend, copie `.env.example` → `.env` et renseigne les clés (voir ci-dessous).
+- **App shopper (mobile)** : scanne le QR Expo Go.
+- **Dashboard magasin (web)** : ouvre `http://localhost:8081` (ou l'URL du tunnel) dans un navigateur → **« Espace magasin »** → login démo **`merchant@demo.spotit` / `demo1234`**.
+
+Sans `.env`, l'app tourne en **fallback local** (seed `src/data/offers.seed.ts`, bandit client) mais la carte, l'IA de curation et le login dashboard nécessitent les clés.
+
+**Vérifier que tout compile :** `npx tsc --noEmit` puis `npx expo export -p android` (et `-p web` pour le dashboard).
 
 ## Variables d'environnement
 
-Voir [`.env.example`](.env.example). Client = `EXPO_PUBLIC_*` (public, RLS protège) :
-`EXPO_PUBLIC_MAPBOX_TOKEN` (pk.), `EXPO_PUBLIC_MAPBOX_STYLE`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_USE_BACKEND=true`.
-Serveur (jamais dans le client, `supabase secrets set`) : `ANTHROPIC_API_KEY`.
+Voir [`.env.example`](.env.example) (placeholders uniquement — jamais de vraie clé commitée).
+
+| Variable | Côté | Rôle |
+|---|---|---|
+| `EXPO_PUBLIC_MAPBOX_TOKEN` | client (public `pk.`) | tuiles + Directions (à restreindre par bundle-ID côté Mapbox) |
+| `EXPO_PUBLIC_MAPBOX_STYLE` | client | style de carte |
+| `EXPO_PUBLIC_SUPABASE_URL` | client | URL projet Supabase |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | client (anon, sûre, RLS) | accès client |
+| `EXPO_PUBLIC_USE_BACKEND` | client | `true` = backend activé |
+| `ANTHROPIC_API_KEY` | **serveur** (API routes) | curation Claude — `process.env`, jamais bundlée |
+| `SUPABASE_SERVICE_ROLE_KEY` | **serveur** (Edge Functions) | admin (bypass RLS) — jamais côté client |
+
+> 🔒 Les `EXPO_PUBLIC_*` sont inlinés dans le bundle (c'est voulu : `pk.` + clé anon sont publiques par design). Les clés serveur restent hors bundle.
 
 ## Architecture
 
 ```
 src/
-  app/            écrans (expo-router): onboarding, (tabs) Découvrir/Carte/Wishlist/Profil, offer/[id], (merchant) dashboard
-  components/     design system RN (porté de design-ref) — SpotMark, BrandTile, WhyForYou…
-  design/         tokens (figés) + theme (fonts, presets)
-  learning/       bandit : features one-hot, score σ, SGD, reasonFor, epsilon-greedy
-  swipe/          SwipeDeck (geste rotation+spring)
-  map/            MapWebView + HTML Mapbox GL JS
-  geo/            proximité (Haversine) + notifs + géofencing (prod)
-  store/          zustand (profil, deck, wishlist, consent)
-  agents/         pont vers l'Edge Function recommend (+ mock local)
-  data/           seed d'offres partagé + options d'onboarding
-supabase/         migrations (schema/RLS/RPC), functions (recommend/profil), seed
-design-ref/       export Claude Design (référence visuelle)
+  app/            écrans (expo-router): welcome, onboarding, (tabs) Découvrir/Carte/Wishlist/Profil,
+                  offer/[id], redeem/[id], ar, (merchant) dashboard/catalog/targeting/audience (web)
+  app/api/        routes serveur Claude : curate+api.ts, intent-followup+api.ts (clé hors bundle)
+  components/     design system RN — SpotMark, BrandTile, MagicLoader, ItinerarySheet, NotifPermissionModal…
+  agents/intent   questions de suivi + agent de curation (Claude, repli local) ; fête des pères déterministe
+  map/            MapWebView + mapHtml (Mapbox GL JS, itinéraire + navigation qui suit)
+  merchant/       données + composants du dashboard (charts, KPIs, mock)
+  data/           offers.seed.ts (offres Lille) + localImages.ts (photos produit) + onboarding.ts
+  geo/ learning/ store/ lib/   proximité, bandit, zustand, env + tracking
+supabase/         migrations (schema/RLS/RPC), functions, seed
 ```
 
-Contrats partagés (interfaces figées) : [`CONTRACTS.md`](CONTRACTS.md).
-Backend local : [`supabase/README.md`](supabase/README.md).
+Contrats figés : [`CONTRACTS.md`](CONTRACTS.md) · Workflow d'équipe : [`CONTRIBUTING.md`](CONTRIBUTING.md) · Backend : [`supabase/README.md`](supabase/README.md).
 
-## Démo (2 min)
+## Démo (fête des pères)
 
-Onboarding → swipe 5 sneakers → le deck se remplit de mode/streetwear + la ligne « Pourquoi pour toi » change → Carte (bulles + cercle 400 m) → « Simuler la marche » → notification → détail offre → dashboard magasin (KPIs).
+Welcome → onboarding (position + notifs natives) → **« un cadeau pour mon père »** → 2 questions (âge + mode de vie) → **loader de curation** → carte avec **uniquement les 11 cadeaux** (photos réelles) → tap une offre → **« Itinéraire »** → la carte **te suit** (zoom rue + cap) → dashboard magasin (web) : dépense, catalogue, ciblage.
