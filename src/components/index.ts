@@ -42,6 +42,9 @@ export type { ProximityRingProps } from './ProximityRing';
 // Loader "magie" IA
 export { MagicLoader, default as MagicLoaderDefault } from './MagicLoader';
 
+// Pop-up permission notifs de proximité
+export { NotifPermissionModal, default as NotifPermissionModalDefault } from './NotifPermissionModal';
+
 // Primitives
 export {
   Screen,

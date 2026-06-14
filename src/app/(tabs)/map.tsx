@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Screen, SpotLogo, Icon } from '@/components';
+import { Screen, SpotLogo, Icon, NotifPermissionModal } from '@/components';
 import { colors, font, shadows, radius, text } from '@/design/theme';
 import { useStore } from '@/store/useStore';
 import { rankOffers } from '@/learning/features';
 import { MapWebView, type MapEta } from '@/map/MapWebView';
 import { useRealLocation } from '@/geo/useLocation';
-import { fireProximityNotification } from '@/geo/notify';
+import { fireProximityNotification, ensureNotifPermission } from '@/geo/notify';
 import { track } from '@/lib/track';
 import { DEMO_USER } from '@/data/offers.seed';
 
@@ -24,6 +24,8 @@ export default function MapScreen() {
   const matchedIds = useStore((s) => s.matchedIds);
   const headline = useStore((s) => s.intentHeadline);
   const intentTxt = useStore((s) => s.intent);
+  const notifPromptSeen = useStore((s) => s.notifPromptSeen);
+  const markNotifPrompt = useStore((s) => s.markNotifPrompt);
 
   const ranked = useMemo(() => {
     const base = matchedIds ? offers.filter((o) => matchedIds.includes(o.id)) : offers;
@@ -37,6 +39,7 @@ export default function MapScreen() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [eta, setEta] = useState<MapEta | null>(null);
+  const [showNotif, setShowNotif] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const select = (id: string | null) => { setSelectedId(id); setEta(null); if (id) track('offer_select', { offerId: id }); };
@@ -53,6 +56,14 @@ export default function MapScreen() {
     if (i >= 0) scrollRef.current?.scrollTo({ x: Math.max(0, i * CARD_W - 20), animated: true });
   }, [selectedId, ranked]);
 
+  // ~1,1 s après la 1re recherche (résultats à l'écran), pop-up de mise en valeur
+  // de la notif de proximité — une seule fois (persisté).
+  useEffect(() => {
+    if (notifPromptSeen || matchedIds == null) return;
+    const t = setTimeout(() => setShowNotif(true), 1100);
+    return () => clearTimeout(t);
+  }, [matchedIds, notifPromptSeen]);
+
   const selected = ranked.find((o) => o.id === selectedId) ?? offers.find((o) => o.id === selectedId);
   // mémoïsé : référence stable tant que l'offre sélectionnée ne change pas
   // (sinon MapWebView relancerait l'itinéraire à chaque render → carte figée).
@@ -68,6 +79,12 @@ export default function MapScreen() {
     const target = ranked.find((o) => o.id === id) ?? offers.find((o) => o.id === id);
     if (target) { fireProximityNotification({ offerId: target.id, brand: target.brand, walkMin: target.walkMin }); track('simulate_walk', { offerId: target.id }); }
   };
+
+  const enableNotif = async () => {
+    setShowNotif(false); markNotifPrompt(); track('notif_prompt', { action: 'enable' });
+    await ensureNotifPermission();
+  };
+  const laterNotif = () => { setShowNotif(false); markNotifPrompt(); track('notif_prompt', { action: 'later' }); };
 
   const empty = matchedIds != null && ranked.length === 0;
   const carouselTitle = `Top ${ranked.length} pour toi`;
@@ -146,6 +163,8 @@ export default function MapScreen() {
           </ScrollView>
         </View>
       ) : null}
+
+      <NotifPermissionModal visible={showNotif} onEnable={enableNotif} onLater={laterNotif} />
     </Screen>
   );
 }

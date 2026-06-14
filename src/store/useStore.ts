@@ -32,6 +32,7 @@ interface SpotState {
   wishlist: string[];
   liked: string[];
   redeemed: string[]; // bons générés (QR "En profiter") — historique
+  notifPromptSeen: boolean; // pop-up notif de proximité déjà proposé (1x)
   lastReason: string | null;
   lastSwipe: { offerId: string; accepted: boolean } | null;
 
@@ -45,6 +46,7 @@ interface SpotState {
   swipe: (offerId: string, accepted: boolean) => void;
   toggleWishlist: (offerId: string) => void;
   markRedeemed: (offerId: string) => void;
+  markNotifPrompt: () => void;
   setConsent: (patch: Partial<Consent>) => void;
   reset: () => void;
 }
@@ -66,6 +68,7 @@ export const useStore = create<SpotState>()(
       wishlist: [],
       liked: [],
       redeemed: [],
+      notifPromptSeen: false,
       lastReason: null,
       lastSwipe: null,
 
@@ -156,13 +159,15 @@ export const useStore = create<SpotState>()(
       markRedeemed: (offerId) =>
         set({ redeemed: Array.from(new Set([...get().redeemed, offerId])) }),
 
+      markNotifPrompt: () => set({ notifPromptSeen: true }),
+
       setConsent: (patch) => set({ consent: { ...get().consent, ...patch } }),
 
       reset: () =>
         set({
           onboarded: false, intent: undefined, consent: DEFAULT_CONSENT, taste: {},
           swipeCount: 0, offers: OFFERS, remainingIds: OFFERS.map((o) => o.id),
-          deck: [], wishlist: [], liked: [], redeemed: [], lastReason: null, lastSwipe: null,
+          deck: [], wishlist: [], liked: [], redeemed: [], notifPromptSeen: false, lastReason: null, lastSwipe: null,
         }),
     }),
     {
@@ -170,7 +175,7 @@ export const useStore = create<SpotState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         onboarded: s.onboarded, intent: s.intent, consent: s.consent,
-        taste: s.taste, swipeCount: s.swipeCount, wishlist: s.wishlist, liked: s.liked, redeemed: s.redeemed,
+        taste: s.taste, swipeCount: s.swipeCount, wishlist: s.wishlist, liked: s.liked, redeemed: s.redeemed, notifPromptSeen: s.notifPromptSeen,
       }),
       onRehydrateStorage: () => (state) => { state?.rebuildDeck(); },
     },
