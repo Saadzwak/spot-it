@@ -56,6 +56,7 @@ export default function MapScreen() {
   const simTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const select = (id: string | null) => { setSelectedId(id); setEta(null); if (id) track('offer_select', { offerId: id }); };
+  const openOffer = (id: string) => { track('offer_open', { offerId: id }); router.push({ pathname: '/offer/[id]', params: { id } }); };
 
   useEffect(() => { if (params.route) { select(String(params.route)); routeFromParam.current = true; } }, [params.route]);
   // nettoie une sélection devenue hors-filtre, sans écraser un itinéraire demandé
@@ -226,13 +227,15 @@ export default function MapScreen() {
       {/* Bandeau itinéraire (offre sélectionnée) */}
       {selected && eta && !eta.error && !navving ? (
         <View style={styles.etaBar}>
-          {selected.image ? <Image source={{ uri: selected.image }} style={styles.etaThumb} contentFit="cover" /> : null}
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.etaBrand} numberOfLines={1}>{selected.brand}</Text>
-            <Text style={styles.etaInfo}>{eta.durationMin} min à pied · {eta.distanceM} m</Text>
-          </View>
+          <Pressable style={styles.etaMain} onPress={() => openOffer(selected.id)}>
+            {selected.image ? <Image source={{ uri: selected.image }} style={styles.etaThumb} contentFit="cover" /> : null}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.etaBrand} numberOfLines={1}>{selected.brand}</Text>
+              <Text style={styles.etaInfo} numberOfLines={1}>{eta.durationMin} min · {eta.distanceM} m · <Text style={styles.etaLink}>Voir l'offre ›</Text></Text>
+            </View>
+          </Pressable>
           <Pressable style={styles.etaGo} onPress={requestItinerary}>
-            <Text style={styles.etaGoTxt}>Itinéraire</Text>
+            <Icon name="nav" size={15} color="#fff" /><Text style={styles.etaGoTxt}>Y aller</Text>
           </Pressable>
           <Pressable hitSlop={10} onPress={() => select(null)} style={styles.etaClose}>
             <Icon name="close" size={18} color={colors.ink2} />
@@ -248,7 +251,7 @@ export default function MapScreen() {
             {ranked.map((o, i) => {
               const on = o.id === selectedId;
               return (
-                <Pressable key={o.id} style={styles.cardSq} onPress={() => select(o.id)}>
+                <Pressable key={o.id} style={styles.cardSq} onPress={() => openOffer(o.id)}>
                   <View style={[styles.thumbWrap, on && styles.thumbOn]}>
                     {o.image ? <Image source={{ uri: o.image }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, { backgroundColor: o.grad?.[0] ?? colors.ink2 }]} />}
                     <View style={styles.rank}><Text style={styles.rankTxt}>{i + 1}</Text></View>
@@ -314,10 +317,12 @@ const styles = StyleSheet.create({
   cardBrand: { fontFamily: font.bodySemiBold, fontSize: 13, color: colors.ink, marginTop: 6 },
   cardDist: { fontFamily: font.body, fontSize: 12, color: colors.ink3 },
   etaBar: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 12, marginTop: 10, padding: 10, borderRadius: radius.card, backgroundColor: colors.surface, ...shadows.card },
+  etaMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
   etaThumb: { width: 48, height: 48, borderRadius: 12 },
   etaBrand: { fontFamily: font.displaySemiBold, fontSize: 16, color: colors.ink },
   etaInfo: { fontFamily: font.body, fontSize: 13, color: colors.ink2, marginTop: 1 },
-  etaGo: { backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
+  etaLink: { fontFamily: font.bodyBold, color: colors.accentInk },
+  etaGo: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
   etaGoTxt: { fontFamily: font.bodyBold, fontSize: 13, color: '#fff' },
   etaClose: { padding: 6 },
   navBanner: { position: 'absolute', top: 14, left: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.ink, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 18, ...shadows.card },
