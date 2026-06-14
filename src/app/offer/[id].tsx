@@ -43,6 +43,10 @@ export default function OfferDetail() {
         </View>
 
         <View style={styles.body}>
+          <View style={styles.promoCard}>
+            <Text style={styles.promoLabel}>L'offre</Text>
+            <Text style={styles.promoText}>{offer.title}</Text>
+          </View>
           <View style={{ alignSelf: 'flex-start' }}>
             <DistancePill offer={offer} />
           </View>
@@ -95,6 +99,9 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 14,
   },
   body: { padding: 20, gap: 16 },
+  promoCard: { backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent, borderRadius: radius.card, padding: 16, gap: 4 },
+  promoLabel: { fontFamily: font.bodyBold, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.accentInk },
+  promoText: { fontFamily: font.displaySemiBold, fontSize: 20, color: colors.ink, letterSpacing: -0.3 },
   desc: { ...text.body, color: colors.ink, lineHeight: 23 },
   addr: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   addrTxt: { ...text.body, color: colors.ink2 },

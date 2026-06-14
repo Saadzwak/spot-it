@@ -42,7 +42,11 @@ export default function MapScreen() {
   const select = (id: string | null) => { setSelectedId(id); setEta(null); if (id) track('offer_select', { offerId: id }); };
 
   useEffect(() => { if (params.route) select(String(params.route)); }, [params.route]);
-  useEffect(() => { select(null); }, [matchedIds]);
+  // nettoie une sélection devenue hors-filtre, sans écraser un itinéraire demandé
+  useEffect(() => {
+    if (!params.route && selectedId && matchedIds && !matchedIds.includes(selectedId)) select(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchedIds]);
   // sync carrousel : défile vers la carte sélectionnée
   useEffect(() => {
     const i = ranked.findIndex((o) => o.id === selectedId);
@@ -61,7 +65,7 @@ export default function MapScreen() {
   };
 
   const empty = matchedIds != null && ranked.length === 0;
-  const carouselTitle = headline || `${ranked.length} pépites pour toi`;
+  const carouselTitle = `Top ${ranked.length} pour toi`;
 
   return (
     <Screen padded={false}>

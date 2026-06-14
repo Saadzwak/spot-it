@@ -13,6 +13,8 @@ export function anchorOffers(offers: Offer[], center: { lat: number; lng: number
     const lat = o.lat + dLat;
     const lng = o.lng + dLng;
     const distanceM = Math.round(haversineM(center.lat, center.lng, lat, lng));
-    return { ...o, lat, lng, distanceM, walkMin: Math.max(1, Math.round(distanceM / 80)) };
+    // l'adresse du seed est parisienne : on l'efface une fois ré-ancré (sinon
+    // "Lille" afficherait une rue de Paris). On montre la distance à la place.
+    return { ...o, lat, lng, distanceM, walkMin: Math.max(1, Math.round(distanceM / 80)), address: undefined };
   });
 }

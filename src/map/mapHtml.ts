@@ -83,9 +83,8 @@ export function buildMapHtml(opts: {
         map.addLayer({ id:'route-casing', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{ 'line-color':'#fff','line-width':9 }});
         map.addLayer({ id:'route-line', type:'line', source:'route', layout:{'line-cap':'round','line-join':'round'}, paint:{ 'line-color':'#F9532E','line-width':5 }});
       }
-      var coords = route.geometry.coordinates;
-      var b = coords.reduce(function(bb,c){ return bb.extend(c); }, new mapboxgl.LngLatBounds(coords[0], coords[0]));
-      map.fitBounds(b, { padding:{ top:80, bottom:230, left:60, right:60 }, duration:700 });
+      // zoome SUR l'offre sélectionnée (et non dézoomer pour tout englober)
+      map.flyTo({ center:[lng,lat], zoom: 16, duration: 800, padding:{ top:40, bottom:240, left:40, right:40 } });
       post({ type:'eta', offerId:offerId, durationMin: Math.max(1, Math.round(route.duration/60)), distanceM: Math.round(route.distance) });
     }).catch(function(){ post({type:'eta', offerId:offerId, error:'fetch'}); });
   }

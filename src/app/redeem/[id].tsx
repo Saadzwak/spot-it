@@ -1,10 +1,10 @@
 // Écran QR "En profiter" — l'utilisateur a accepté l'offre : on génère un QR (+ code)
 // à présenter en caisse. Sert à identifier les offres présentées qui ont abouti.
 import { useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Share } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Icon, PrimaryButton } from '@/components';
+import { Icon, PrimaryButton, GhostButton } from '@/components';
 import { colors, font, text, radius, shadows } from '@/design/theme';
 import { useStore } from '@/store/useStore';
 import { track } from '@/lib/track';
@@ -33,6 +33,11 @@ export default function Redeem() {
   const code = makeCode(offer.id);
   const value = `spotit://redeem?offer=${offer.id}&code=${code}`;
 
+  const addToWallet = async () => {
+    track('add_to_wallet', { offerId: offer.id });
+    try { await Share.share({ message: `Mon bon Spot.it · ${offer.brand} — ${offer.title}\nCode : ${code}`, url: value }); } catch { /* annulé */ }
+  };
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
@@ -50,6 +55,7 @@ export default function Redeem() {
         <Text style={styles.code}>{code}</Text>
         <Text style={styles.hint}>Présente ce QR (ou le code) en caisse pour profiter de l'offre.</Text>
         <View style={styles.cta}>
+          <GhostButton label="Ajouter à Apple Wallet" onPress={addToWallet} icon={<Icon name="plus" size={18} color={colors.ink} />} />
           <PrimaryButton label="C'est noté" onPress={() => router.replace('/(tabs)/discover')} icon={<Icon name="check" size={18} color="#fff" />} />
         </View>
       </View>
@@ -69,5 +75,5 @@ const styles = StyleSheet.create({
   qrCard: { backgroundColor: '#fff', padding: 22, borderRadius: radius.card, marginTop: 8, ...shadows.card },
   code: { fontFamily: font.bodyBold, fontSize: 22, letterSpacing: 3, color: colors.ink, marginTop: 6 },
   hint: { ...text.body, textAlign: 'center', maxWidth: 280 },
-  cta: { alignSelf: 'stretch', marginTop: 12 },
+  cta: { alignSelf: 'stretch', marginTop: 12, gap: 10 },
 });
