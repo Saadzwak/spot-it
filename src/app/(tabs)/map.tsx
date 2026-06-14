@@ -69,13 +69,14 @@ export default function MapScreen() {
     if (i >= 0) scrollRef.current?.scrollTo({ x: Math.max(0, i * CARD_W - 20), animated: true });
   }, [selectedId, ranked]);
 
-  // ~1,1 s après la 1re recherche (résultats à l'écran), pop-up de mise en valeur
-  // de la notif de proximité — une seule fois (persisté).
+  // ~1,1 s après CHAQUE recherche (nouveau résultat à l'écran), pop-up de mise en
+  // valeur de la notif de proximité — affiché à chaque recherche (choix démo).
   useEffect(() => {
-    if (notifPromptSeen || matchedIds == null) return;
+    if (matchedIds == null) return;
     const t = setTimeout(() => setShowNotif(true), 1100);
     return () => clearTimeout(t);
-  }, [matchedIds, notifPromptSeen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchedIds]);
 
   const selected = ranked.find((o) => o.id === selectedId) ?? offers.find((o) => o.id === selectedId);
   // mémoïsé : référence stable tant que l'offre sélectionnée ne change pas
