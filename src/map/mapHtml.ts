@@ -94,9 +94,9 @@ export function buildMapHtml(opts: {
       var steps = [];
       try { (route.legs||[]).forEach(function(leg){ (leg.steps||[]).forEach(function(st){
         var m = st.maneuver || {};
-        steps.push({ instruction: m.instruction || st.name || '', distanceM: Math.round(st.distance||0), type: m.type||'', modifier: m.modifier||'', name: st.name||'' });
+        steps.push({ instruction: m.instruction || st.name || '', distanceM: Math.round(st.distance||0), type: m.type||'', modifier: m.modifier||'', name: st.name||'', location: m.location || null });
       }); }); } catch(e){}
-      post({ type:'eta', offerId:offerId, durationMin: Math.max(1, Math.round(route.duration/60)), distanceM: Math.round(route.distance), steps: steps });
+      post({ type:'eta', offerId:offerId, durationMin: Math.max(1, Math.round(route.duration/60)), distanceM: Math.round(route.distance), steps: steps, coords: lastRouteCoords || [] });
     }).catch(function(){ post({type:'eta', offerId:offerId, error:'fetch'}); });
   }
   function clearRoute(){ highlight(null); if(map.getLayer('route-line')){ map.removeLayer('route-line'); } if(map.getLayer('route-casing')){ map.removeLayer('route-casing'); } if(map.getSource('route')){ map.removeSource('route'); } }
@@ -123,6 +123,7 @@ export function buildMapHtml(opts: {
     else if(d.type==='clearRoute'){ clearRoute(); }
     else if(d.type==='recenter'){ recenter(d.lng, d.lat); }
     else if(d.type==='fitRoute'){ fitRoute(); }
+    else if(d.type==='navZoom'){ map.flyTo({ center: CENTER, zoom: d.zoom || 17.5, duration: 700 }); }
     else if(d.type==='flyTo'){ map.flyTo({ center:[d.lng,d.lat], zoom:15 }); }
   } catch(_){} }
   document.addEventListener('message', onRN); window.addEventListener('message', onRN);

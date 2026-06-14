@@ -9,6 +9,8 @@ import { rankOffers } from '@/learning/features';
 import { MapWebView, type MapEta } from '@/map/MapWebView';
 import { useRealLocation } from '@/geo/useLocation';
 import { fireProximityNotification, ensureNotifPermission } from '@/geo/notify';
+import { haversineM } from '@/geo/proximity';
+import * as Location from 'expo-location';
 import { track } from '@/lib/track';
 import { DEMO_USER } from '@/data/offers.seed';
 
@@ -44,6 +46,14 @@ export default function MapScreen() {
   const [overviewTick, setOverviewTick] = useState(0);
   const routeFromParam = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
+
+  // mode navigation temps réel
+  const [navving, setNavving] = useState(false);
+  const [navPos, setNavPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [stepIdx, setStepIdx] = useState(0);
+  const [navZoomTick, setNavZoomTick] = useState(0);
+  const watchSub = useRef<Location.LocationSubscription | null>(null);
+  const simTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const select = (id: string | null) => { setSelectedId(id); setEta(null); if (id) track('offer_select', { offerId: id }); };
 
@@ -92,8 +102,72 @@ export default function MapScreen() {
   // Demande explicite d'itinéraire → cadre tout le tracé sur la carte + étapes.
   const requestItinerary = () => { setOverviewTick((t) => t + 1); setShowItinerary(true); };
 
+  // ——— Mode navigation temps réel ———
+  const clearSim = () => { if (simTimer.current) { clearTimeout(simTimer.current); simTimer.current = null; } };
+
+  // avance l'étape courante quand on arrive sur sa manœuvre (~30 m)
+  const advanceStepByPos = (lat: number, lng: number) => {
+    const steps = eta?.steps; if (!steps) return;
+    setStepIdx((idx) => {
+      let i = idx;
+      while (i < steps.length - 1) {
+        const loc = steps[i]?.location;
+        if (loc && haversineM(lat, lng, loc[1], loc[0]) < 30) i += 1; else break;
+      }
+      return i;
+    });
+  };
+
+  const startNav = async () => {
+    setShowItinerary(false);
+    setNavving(true); setStepIdx(0);
+    setNavPos(userLoc ?? DEMO_USER);
+    setNavZoomTick((t) => t + 1);
+    track('nav_start', { offerId: selected?.id });
+    try {
+      watchSub.current = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 2000 },
+        (pos) => { const { latitude, longitude } = pos.coords; setNavPos({ lat: latitude, lng: longitude }); advanceStepByPos(latitude, longitude); },
+      );
+    } catch { /* GPS indisponible */ }
+  };
+
+  // démo sans marcher : anime la position le long du tracé
+  const simulateRoute = () => {
+    const coords = eta?.coords; if (!coords || coords.length < 2) return;
+    clearSim();
+    const total = coords.length;
+    const stride = Math.max(1, Math.floor(total / 60));
+    let i = 0;
+    const tick = () => {
+      if (i >= total) { clearSim(); return; }
+      const [lng, lat] = coords[i];
+      setNavPos({ lat, lng }); advanceStepByPos(lat, lng);
+      i += stride;
+      simTimer.current = setTimeout(tick, 220);
+    };
+    tick();
+  };
+
+  const endNav = () => {
+    clearSim();
+    watchSub.current?.remove(); watchSub.current = null;
+    setNavving(false); setNavPos(null); setStepIdx(0);
+    setOverviewTick((t) => t + 1);
+    track('nav_end', { offerId: selected?.id });
+  };
+
+  useEffect(() => () => { clearSim(); watchSub.current?.remove(); }, []);
+
   const empty = matchedIds != null && ranked.length === 0;
   const carouselTitle = `Top ${ranked.length} pour toi`;
+
+  const navStep = eta?.steps?.[stepIdx];
+  const navInstruction = navStep?.instruction || 'Continue tout droit';
+  const navNextLoc = navStep?.location;
+  const navDist = navPos && navNextLoc
+    ? `${Math.round(haversineM(navPos.lat, navPos.lng, navNextLoc[1], navNextLoc[0]))} m`
+    : (navStep?.distanceM ? `${navStep.distanceM} m` : '');
 
   return (
     <Screen padded={false}>
@@ -105,9 +179,10 @@ export default function MapScreen() {
       <View style={styles.mapWrap}>
         <MapWebView
           offers={ranked}
-          center={userLoc ?? DEMO_USER}
+          center={navving && navPos ? navPos : (userLoc ?? DEMO_USER)}
           routeTo={routeTo}
           overviewSignal={overviewTick}
+          navZoomSignal={navZoomTick}
           onSelectOffer={(id) => select(id)}
           onEta={(e) => {
             setEta(e);
@@ -116,12 +191,24 @@ export default function MapScreen() {
           }}
         />
 
-        <Pressable style={styles.arBtn} onPress={() => router.push('/ar')}>
-          <Icon name="target" size={18} color="#fff" /><Text style={styles.btnTxt}>Vue AR</Text>
-        </Pressable>
-        <Pressable style={styles.simulate} onPress={simulate}>
-          <Icon name="walk" size={16} color="#fff" /><Text style={styles.btnTxt}>Simuler la marche</Text>
-        </Pressable>
+        {!navving ? (
+          <>
+            <Pressable style={styles.arBtn} onPress={() => router.push('/ar')}>
+              <Icon name="target" size={18} color="#fff" /><Text style={styles.btnTxt}>Vue AR</Text>
+            </Pressable>
+            <Pressable style={styles.simulate} onPress={simulate}>
+              <Icon name="walk" size={16} color="#fff" /><Text style={styles.btnTxt}>Simuler la marche</Text>
+            </Pressable>
+          </>
+        ) : (
+          <View style={styles.navBanner}>
+            <View style={styles.navIcon}><Icon name="nav" size={20} color="#fff" /></View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.navStep} numberOfLines={2}>{navInstruction}</Text>
+              <Text style={styles.navMeta} numberOfLines={1}>{navDist ? navDist + ' · ' : ''}{selected?.brand}</Text>
+            </View>
+          </View>
+        )}
 
         {empty ? (
           <View style={styles.empty} pointerEvents="box-none">
@@ -137,7 +224,7 @@ export default function MapScreen() {
       </View>
 
       {/* Bandeau itinéraire (offre sélectionnée) */}
-      {selected && eta && !eta.error ? (
+      {selected && eta && !eta.error && !navving ? (
         <View style={styles.etaBar}>
           {selected.image ? <Image source={{ uri: selected.image }} style={styles.etaThumb} contentFit="cover" /> : null}
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -154,7 +241,7 @@ export default function MapScreen() {
       ) : null}
 
       {/* Carrousel des offres (synchro carte) */}
-      {!empty && ranked.length > 0 ? (
+      {!empty && ranked.length > 0 && !navving ? (
         <View style={styles.carouselWrap}>
           <Text style={styles.carouselTitle}>{carouselTitle}</Text>
           <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel}>
@@ -175,6 +262,17 @@ export default function MapScreen() {
         </View>
       ) : null}
 
+      {navving ? (
+        <View style={styles.navControls}>
+          <Pressable style={styles.navSim} onPress={simulateRoute}>
+            <Icon name="walk" size={16} color="#fff" /><Text style={styles.navSimTxt}>Simuler le trajet</Text>
+          </Pressable>
+          <Pressable style={styles.navEnd} onPress={endNav}>
+            <Text style={styles.navEndTxt}>Terminer</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <NotifPermissionModal visible={showNotif} onEnable={enableNotif} onLater={laterNotif} />
       <ItinerarySheet
         visible={showItinerary && !!selected}
@@ -185,6 +283,7 @@ export default function MapScreen() {
         steps={eta?.steps}
         onClose={() => setShowItinerary(false)}
         onSeeOffer={selected ? () => { setShowItinerary(false); router.push({ pathname: '/offer/[id]', params: { id: selected.id } }); } : undefined}
+        onStart={startNav}
       />
     </Screen>
   );
@@ -221,4 +320,13 @@ const styles = StyleSheet.create({
   etaGo: { backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
   etaGoTxt: { fontFamily: font.bodyBold, fontSize: 13, color: '#fff' },
   etaClose: { padding: 6 },
+  navBanner: { position: 'absolute', top: 14, left: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.ink, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 18, ...shadows.card },
+  navIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  navStep: { fontFamily: font.displaySemiBold, fontSize: 15, color: '#fff', lineHeight: 19 },
+  navMeta: { fontFamily: font.body, fontSize: 12.5, color: 'rgba(255,255,255,0.72)', marginTop: 2 },
+  navControls: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, backgroundColor: colors.canvas },
+  navSim: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.accent, paddingVertical: 14, borderRadius: radius.card, ...shadows.sm, shadowColor: colors.accent },
+  navSimTxt: { fontFamily: font.bodyBold, fontSize: 14, color: '#fff' },
+  navEnd: { paddingHorizontal: 18, paddingVertical: 14, borderRadius: radius.card, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+  navEndTxt: { fontFamily: font.bodySemiBold, fontSize: 14, color: colors.ink },
 });

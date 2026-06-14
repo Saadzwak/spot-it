@@ -28,7 +28,7 @@ function StepRow({ title, sub, last, end }: { title: string; sub?: string; last?
 }
 
 export function ItinerarySheet({
-  visible, brand, image, durationMin, distanceM, steps, onClose, onSeeOffer,
+  visible, brand, image, durationMin, distanceM, steps, onClose, onSeeOffer, onStart,
 }: {
   visible: boolean;
   brand?: string;
@@ -38,6 +38,7 @@ export function ItinerarySheet({
   steps?: RouteStep[];
   onClose: () => void;
   onSeeOffer?: () => void;
+  onStart?: () => void;
 }) {
   const list = steps ?? [];
   // on retire l'étape "arrive" générique de Mapbox (remplacée par notre ligne d'arrivée brandée)
@@ -72,11 +73,19 @@ export function ItinerarySheet({
             <StepRow title={brand ? `${brand} — arrivée` : 'Arrivée'} sub="Présente-toi en boutique" last end />
           </ScrollView>
 
-          {onSeeOffer ? (
-            <Pressable style={styles.offerBtn} onPress={onSeeOffer}>
-              <Text style={styles.offerBtnTxt}>Voir l'offre</Text>
-            </Pressable>
-          ) : null}
+          <View style={styles.footer}>
+            {onStart ? (
+              <Pressable style={styles.startBtn} onPress={onStart}>
+                <Icon name="nav" size={18} color="#fff" />
+                <Text style={styles.startTxt}>Démarrer</Text>
+              </Pressable>
+            ) : null}
+            {onSeeOffer ? (
+              <Pressable style={styles.offerLink} onPress={onSeeOffer} hitSlop={8}>
+                <Text style={styles.offerLinkTxt}>Voir l'offre</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </Animated.View>
       </Animated.View>
     </Modal>
@@ -105,8 +114,11 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1, paddingBottom: 18 },
   rowTitle: { fontFamily: font.bodySemiBold, fontSize: 15, color: colors.ink, lineHeight: 20 },
   rowSub: { fontFamily: font.body, fontSize: 13, color: colors.ink3, marginTop: 2 },
-  offerBtn: { marginTop: 8, backgroundColor: colors.accent, paddingVertical: 14, borderRadius: radius.card, alignItems: 'center', ...shadows.sm, shadowColor: colors.accent },
-  offerBtnTxt: { fontFamily: font.bodyBold, fontSize: 15, color: '#fff' },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
+  startBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.accent, paddingVertical: 14, borderRadius: radius.card, ...shadows.sm, shadowColor: colors.accent },
+  startTxt: { fontFamily: font.bodyBold, fontSize: 15, color: '#fff' },
+  offerLink: { paddingHorizontal: 8, paddingVertical: 10 },
+  offerLinkTxt: { fontFamily: font.bodySemiBold, fontSize: 14, color: colors.ink2 },
 });
 
 export default ItinerarySheet;

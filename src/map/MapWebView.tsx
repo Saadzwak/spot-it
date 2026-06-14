@@ -23,18 +23,19 @@ function toMarkers(offers: Offer[]): MapMarker[] {
     }));
 }
 
-export interface RouteStep { instruction: string; distanceM: number; type?: string; modifier?: string; name?: string }
-export interface MapEta { offerId: string; durationMin?: number; distanceM?: number; error?: string; steps?: RouteStep[] }
+export interface RouteStep { instruction: string; distanceM: number; type?: string; modifier?: string; name?: string; location?: [number, number] | null }
+export interface MapEta { offerId: string; durationMin?: number; distanceM?: number; error?: string; steps?: RouteStep[]; coords?: [number, number][] }
 export interface MapWebViewProps {
   offers: Offer[];
   center?: { lat: number; lng: number };
   routeTo?: { id: string; lat: number; lng: number } | null;
   overviewSignal?: number; // incrémenter pour cadrer TOUT le tracé (vue d'ensemble)
+  navZoomSignal?: number;  // incrémenter pour zoomer au niveau navigation sur le user
   onSelectOffer?: (offerId: string) => void;
   onEta?: (e: MapEta) => void;
 }
 
-export function MapWebView({ offers, center = DEMO_USER, routeTo, overviewSignal, onSelectOffer, onEta }: MapWebViewProps) {
+export function MapWebView({ offers, center = DEMO_USER, routeTo, overviewSignal, navZoomSignal, onSelectOffer, onEta }: MapWebViewProps) {
   const ref = useRef<WebView>(null);
   const ready = useRef(false);
   // On NE reconstruit le HTML que si les marqueurs changent (pas à chaque jitter
@@ -68,6 +69,12 @@ export function MapWebView({ offers, center = DEMO_USER, routeTo, overviewSignal
     if (ready.current && overviewSignal) ref.current?.postMessage(JSON.stringify({ type: 'fitRoute' }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overviewSignal]);
+
+  // Zoom niveau navigation sur la position du user (mode nav).
+  useEffect(() => {
+    if (ready.current && navZoomSignal) ref.current?.postMessage(JSON.stringify({ type: 'navZoom', zoom: 17.5 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navZoomSignal]);
 
   if (!hasMapbox()) {
     return (
