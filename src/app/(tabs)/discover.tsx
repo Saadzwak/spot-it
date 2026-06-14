@@ -10,6 +10,7 @@ import { colors, font, text, shadows } from '@/design/theme';
 import { useStore } from '@/store/useStore';
 import { INTENT_SUGGESTIONS } from '@/data/onboarding';
 import { getIntentFollowups, buildIntentPicks, curateOffers, type FollowupQ } from '@/agents/intent';
+import { track } from '@/lib/track';
 
 const EXAMPLES = INTENT_SUGGESTIONS.slice(0, 4);
 type Phase = 'ask' | 'magic' | 'followups' | 'curating';
@@ -28,10 +29,11 @@ export default function DiscoverScreen() {
 
   const goMap = () => router.push('/(tabs)/map');
 
-  const decideForMe = () => { setMatched(null, 'Sélection pour toi'); goMap(); };
+  const decideForMe = () => { track('decide_for_me'); setMatched(null, 'Sélection pour toi'); goMap(); };
 
   const startIntent = async () => {
     if (!intent.trim() || phase !== 'ask') return;
+    track('intent_submit', { intent: intent.trim() });
     setPhase('magic');
     const qs = await getIntentFollowups(intent.trim());
     setFollowups(qs); setAnswers({}); setCurrentQ(0); setPhase('followups');
@@ -42,6 +44,7 @@ export default function DiscoverScreen() {
     const { picks, summary } = buildIntentPicks(intent, finalAnswers);
     applyIntent(picks, summary);
     const res = await curateOffers(intent.trim(), finalAnswers, offers);
+    track('curate', { count: res.offerIds.length, intent: intent.trim() });
     setMatched(res.offerIds, res.headline);
     goMap();
     setTimeout(() => setPhase('ask'), 400); // reset pour le prochain passage

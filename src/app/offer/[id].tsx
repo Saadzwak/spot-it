@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { BrandTile, WhyForYou, DistancePill, Sponsored, Icon, PrimaryButton, GhostButton } from '@/components';
 import { colors, font, text, radius, shadows } from '@/design/theme';
 import { useStore } from '@/store/useStore';
 import { reasonFor } from '@/learning/features';
+import { track } from '@/lib/track';
 
 export default function OfferDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -14,6 +16,7 @@ export default function OfferDetail() {
   const toggleWishlist = useStore((s) => s.toggleWishlist);
 
   const offer = offers.find((o) => o.id === id);
+  useEffect(() => { if (offer) track('offer_open', { offerId: offer.id, brand: offer.brand }); }, [offer]);
   if (!offer) {
     return (
       <View style={styles.missing}>
@@ -57,11 +60,14 @@ export default function OfferDetail() {
       <View style={styles.cta}>
         <View style={{ flex: 1 }}>
           <PrimaryButton
-            label="Itinéraire"
-            onPress={() => router.push({ pathname: '/(tabs)/map', params: { route: offer.id } })}
-            icon={<Icon name="nav" size={18} color="#fff" />}
+            label="En profiter"
+            onPress={() => { track('offer_redeem_intent', { offerId: offer.id }); router.push({ pathname: '/redeem/[id]', params: { id: offer.id } }); }}
+            icon={<Icon name="check" size={18} color="#fff" />}
           />
         </View>
+        <Pressable style={styles.mapBtn} onPress={() => { track('itinerary_open', { offerId: offer.id }); router.push({ pathname: '/(tabs)/map', params: { route: offer.id } }); }} accessibilityLabel="Itinéraire">
+          <Icon name="nav" size={22} color={colors.ink} />
+        </Pressable>
         <Pressable style={styles.mapBtn} onPress={() => toggleWishlist(offer.id)} accessibilityLabel="Wishlist">
           <Icon name={saved ? 'heartFill' : 'heart'} size={22} color={saved ? colors.accent : colors.ink} />
         </Pressable>

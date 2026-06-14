@@ -6,13 +6,14 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Screen, SpotLogo, PrimaryButton, Icon } from '@/components';
 import { colors, font, text, radius, shadows } from '@/design/theme';
+import { track } from '@/lib/track';
 
 const IMG_A = 'https://loremflickr.com/600/700/shopping,boutique?lock=901';
 const IMG_B = 'https://loremflickr.com/600/700/paris,street,store?lock=902';
 
 export default function Welcome() {
   const router = useRouter();
-  const enter = () => router.replace('/onboarding');
+  const enter = () => { track('login'); router.replace('/onboarding'); };
 
   return (
     <Screen padded>

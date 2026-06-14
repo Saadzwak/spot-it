@@ -9,6 +9,7 @@ import { rankOffers } from '@/learning/features';
 import { MapWebView, type MapEta } from '@/map/MapWebView';
 import { useRealLocation } from '@/geo/useLocation';
 import { fireProximityNotification } from '@/geo/notify';
+import { track } from '@/lib/track';
 import { DEMO_USER } from '@/data/offers.seed';
 
 const CARD_W = 116; // 104 + gap 12
@@ -38,7 +39,7 @@ export default function MapScreen() {
   const [eta, setEta] = useState<MapEta | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
-  const select = (id: string | null) => { setSelectedId(id); setEta(null); };
+  const select = (id: string | null) => { setSelectedId(id); setEta(null); if (id) track('offer_select', { offerId: id }); };
 
   useEffect(() => { if (params.route) select(String(params.route)); }, [params.route]);
   useEffect(() => { select(null); }, [matchedIds]);
@@ -56,7 +57,7 @@ export default function MapScreen() {
     let id = selectedId ?? ranked[0]?.id ?? null;
     if (!selectedId && id) select(id);
     const target = ranked.find((o) => o.id === id) ?? offers.find((o) => o.id === id);
-    if (target) fireProximityNotification({ offerId: target.id, brand: target.brand, walkMin: target.walkMin });
+    if (target) { fireProximityNotification({ offerId: target.id, brand: target.brand, walkMin: target.walkMin }); track('simulate_walk', { offerId: target.id }); }
   };
 
   const empty = matchedIds != null && ranked.length === 0;

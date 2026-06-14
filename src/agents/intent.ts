@@ -106,13 +106,16 @@ export function localCurate(intent: string, answers: Record<string, string>, off
   const { picks } = buildIntentPicks(intent, answers);
   const cats = picks.filter((p) => p.startsWith('cat:')).map((p) => p.slice(4));
   const words = `${intent} ${Object.values(answers).join(' ')}`.toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter((w) => w.length > 2);
-  const scored = offers.map((o) => {
-    let s = 0;
-    if (cats.length && cats.includes(o.category)) s += 3;
+  // Seuil strict : si une catégorie est déduite, on RESTE dans cette catégorie
+  // (pas de bruit cross-catégorie). Sinon, match par mots-clés uniquement.
+  const pool = cats.length ? offers.filter((o) => cats.includes(o.category)) : offers;
+  const scored = pool.map((o) => {
+    let s = cats.length ? 1 : 0; // déjà dans la bonne catégorie
     const text = `${o.brand} ${o.title} ${o.description ?? ''} ${o.category}`.toLowerCase();
     for (const w of words) if (text.includes(w)) s += 1;
     return { o, s };
-  }).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
-  const offerIds = scored.slice(0, 10).map((x) => x.o.id);
+  });
+  const kept = (cats.length ? scored : scored.filter((x) => x.s > 0)).sort((a, b) => b.s - a.s);
+  const offerIds = kept.slice(0, 10).map((x) => x.o.id);
   return { offerIds, headline: offerIds.length ? `${offerIds.length} pépites pour toi` : '' };
 }
