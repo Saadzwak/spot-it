@@ -44,6 +44,8 @@ export interface Offer {
   lng?: number;
   distanceM?: number;       // dynamique (depuis position user) ; seed peut précalculer
   walkMin?: number;
+  // ── tags libres pour des sélections curées (ex. 'fathers-day') ──
+  tags?: string[];
 }
 
 /** Profil de goûts = poids sparse par feature-VALEUR (one-hot). */

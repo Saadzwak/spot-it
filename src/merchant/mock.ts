@@ -180,7 +180,7 @@ export const MOCK_SPEND_MODEL_7J: SpendModel = {
   variableCents: 13300,
   totalCents: 18200,
   fixedLabel: 'Forfait hebdo (socle)',
-  variableLabel: 'Performance (CPC · clics)',
+  variableLabel: 'Sponsoring (CPC · clics)',
 };
 
 export const MOCK_SPEND_MODEL_30J: SpendModel = {
@@ -188,7 +188,7 @@ export const MOCK_SPEND_MODEL_30J: SpendModel = {
   variableCents: 55000,
   totalCents: 74600,
   fixedLabel: 'Forfait mensuel (socle)',
-  variableLabel: 'Performance (CPC · clics)',
+  variableLabel: 'Sponsoring (CPC · clics)',
 };
 
 // Séries journalières de dépense (fixed + variable) — 7j et 30j

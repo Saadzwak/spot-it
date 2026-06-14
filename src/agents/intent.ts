@@ -91,8 +91,29 @@ export function buildIntentPicks(intent: string, answers: Record<string, string>
   return { picks: [...picks], summary: intent.trim() };
 }
 
+const DAD_RE = /(p[èe]re|papa|f[êe]te des p[èe]res|father|dad)/i;
+
+/** Trie la sélection fête des pères selon le mode de vie déclaré (réponse de suivi). */
+function rankFathersDay(dad: Offer[], s: string): Offer[] {
+  const want: string[] = [];
+  if (/sportif|sport|running|fitness/.test(s)) want.push('sportif', 'tech', 'musique');
+  if (/bricol|outil|jardin/.test(s)) want.push('bricoleur', 'pratique');
+  if (/casanier|cosy|cocoon|maison/.test(s)) want.push('casanier', 'rasage', 'musique');
+  if (/gourmet|ap[ée]ro|[ée]l[ée]gant|standing|raffin|parfum/.test(s)) want.push('elegant', 'parfum');
+  if (!want.length) return dad;
+  const score = (o: Offer) => (o.tags ?? []).filter((t) => want.includes(t)).length;
+  return dad.slice().sort((a, b) => score(b) - score(a));
+}
+
 /** Agent de curation : sélectionne les offres pertinentes (Claude, repli local). */
 export async function curateOffers(intent: string, answers: Record<string, string>, offers: Offer[]): Promise<CurateResult> {
+  const s = `${intent} ${Object.values(answers).join(' ')}`.toLowerCase();
+  // Fête des pères : sélection curée DÉTERMINISTE — on ne montre QUE les cadeaux
+  // taggés 'fathers-day' (photos réelles), triés selon le mode de vie du père.
+  if (DAD_RE.test(s)) {
+    const dad = rankFathersDay(offers.filter((o) => o.tags?.includes('fathers-day')), s);
+    if (dad.length) return { offerIds: dad.map((o) => o.id).slice(0, 12), headline: `${dad.length} idées cadeau pour papa` };
+  }
   const url = devServerUrl('/api/curate');
   if (url) {
     try {

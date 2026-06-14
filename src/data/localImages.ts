@@ -26,6 +26,18 @@ const MODULES: Record<string, number> = {
   'nike-amplus-fff': require('../../assets/offers/nike-amplus-fff.jpeg'),
   'nike-ava-x': require('../../assets/offers/nike-ava-x.jpeg'),
   'nike-mercurial-vapor17': require('../../assets/offers/nike-mercurial-vapor17.jpeg'),
+  // Fête des pères (cadeau_papa) — sélection curée à photos réelles
+  'papa-airtag': require('../../assets/offers/cadeau_papa/papa-airtag.jpeg'),
+  'papa-outil': require('../../assets/offers/cadeau_papa/papa-outil.jpeg'),
+  'papa-dior-sauvage': require('../../assets/offers/cadeau_papa/papa-dior-sauvage.jpeg'),
+  'papa-jbl-flip6': require('../../assets/offers/cadeau_papa/papa-jbl-flip6.jpeg'),
+  'papa-fragonard': require('../../assets/offers/cadeau_papa/papa-fragonard.jpeg'),
+  'papa-garmin': require('../../assets/offers/cadeau_papa/papa-garmin.jpeg'),
+  'papa-guerlain': require('../../assets/offers/cadeau_papa/papa-guerlain.jpeg'),
+  'papa-barbier': require('../../assets/offers/cadeau_papa/papa-barbier.jpeg'),
+  'papa-philips-oneblade': require('../../assets/offers/cadeau_papa/papa-philips-oneblade.jpeg'),
+  'papa-proraso': require('../../assets/offers/cadeau_papa/papa-proraso.jpeg'),
+  'papa-ysl': require('../../assets/offers/cadeau_papa/papa-ysl.jpeg'),
 };
 
 function toUri(m: number): string {

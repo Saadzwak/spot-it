@@ -119,7 +119,7 @@ function SpendDetailCard({ period }: { period: Period }): React.ReactElement {
         </View>
         <View style={spendStyles.legendItem}>
           <View style={[spendStyles.legendDot, { backgroundColor: colors.accent }]} />
-          <Text style={spendStyles.legendLabel}>Performance</Text>
+          <Text style={spendStyles.legendLabel}>Sponsoring</Text>
         </View>
       </View>
 
