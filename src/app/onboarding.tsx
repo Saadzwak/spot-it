@@ -1,33 +1,49 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Linking, ActivityIndicator } from 'react-native';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { Screen, SpotLogo, SpotMark, ProximityRing, PrimaryButton, GhostButton, Toggle, Icon } from '@/components';
 import { colors, radius, font, text, shadows } from '@/design/theme';
 import { useStore } from '@/store/useStore';
 import { TASTE_TAGS, WALLET_ARCHETYPES, BUYING_STYLES } from '@/data/onboarding';
-import { ensureLocationPermission } from '@/geo/proximity';
 
 const uniq = (a: string[]) => Array.from(new Set(a));
 
 export default function Onboarding() {
   const router = useRouter();
   const completeOnboarding = useStore((s) => s.completeOnboarding);
+  const setUserLoc = useStore((s) => s.setUserLoc);
 
   const [step, setStep] = useState(0); // 0 goûts · 1 porte-monnaie · 2 style · 3 localisation
   const [tastes, setTastes] = useState<string[]>([]);
   const [wallet, setWallet] = useState<string | null>(null);
   const [style, setStyle] = useState<string | null>(null);
-  const [locationOn, setLocationOn] = useState(true);
+  const [locStatus, setLocStatus] = useState<'idle' | 'loading' | 'denied'>('idle');
 
-  const finish = async () => {
+  const finish = (withLocation: boolean) => {
     const picks = uniq([
       ...tastes.flatMap((id) => TASTE_TAGS.find((t) => t.id === id)?.picks ?? []),
       ...(WALLET_ARCHETYPES.find((a) => a.id === wallet)?.picks ?? []),
       ...(BUYING_STYLES.find((a) => a.id === style)?.picks ?? []),
     ]);
-    if (locationOn) { try { await ensureLocationPermission(); } catch { /* ignore */ } }
-    completeOnboarding(picks, undefined, { location: locationOn, share_data: false });
+    completeOnboarding(picks, undefined, { location: withLocation, share_data: false });
     router.replace('/landing');
+  };
+
+  // Vrai prompt iOS natif + vraie position → ancre les offres avant la carte.
+  const requestLocation = async () => {
+    setLocStatus('loading');
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { setLocStatus('denied'); return; }
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      } catch { /* on garde, finish quand même */ }
+      finish(true);
+    } catch {
+      setLocStatus('denied');
+    }
   };
 
   return (
@@ -79,18 +95,32 @@ export default function Onboarding() {
               <View style={styles.ringCenter}><SpotMark size={40} /></View>
             </View>
             <Text style={styles.locTitle}>Les offres, juste autour de toi</Text>
-            <Text style={styles.locSub}>Active ta position pour voir les bons plans proches et être prévenu à ~5 min d’un magasin partenaire.</Text>
-            <View style={styles.locToggle}>
-              <Toggle value={locationOn} onValueChange={setLocationOn} label="Activer la localisation" sublabel="Tu gardes le contrôle, modifiable à tout moment" />
-            </View>
+            <Text style={styles.locSub}>Active ta position pour des offres précises près de toi et une alerte à ~5 min d’un magasin.</Text>
+
+            {locStatus === 'denied' ? (
+              <View style={styles.denyCard}>
+                <Text style={styles.denyTxt}>Localisation refusée. Active-la dans les Réglages pour des offres précises.</Text>
+                <PrimaryButton label="Ouvrir les Réglages" onPress={() => Linking.openSettings()} icon={<Icon name="settings" size={18} color="#fff" />} />
+                <GhostButton label="Continuer sans" onPress={() => finish(false)} />
+              </View>
+            ) : (
+              <View style={styles.locActions}>
+                <PrimaryButton
+                  label={locStatus === 'loading' ? 'Localisation…' : 'Activer ma position'}
+                  onPress={requestLocation}
+                  disabled={locStatus === 'loading'}
+                  icon={locStatus === 'loading' ? <ActivityIndicator color="#fff" /> : <Icon name="pin" size={18} color="#fff" />}
+                />
+                <Pressable onPress={() => finish(false)} hitSlop={8} style={styles.laterBtn}><Text style={styles.later}>Plus tard</Text></Pressable>
+              </View>
+            )}
           </View>
         )}
       </View>
 
       <View style={styles.footer}>
-        {step > 0 ? <GhostButton label="Retour" onPress={() => setStep((s) => s - 1)} /> : <View style={{ flex: 1 }} />}
+        {step > 0 ? <GhostButton label="Retour" onPress={() => { setLocStatus('idle'); setStep((s) => s - 1); }} /> : <View style={{ flex: 1 }} />}
         {step === 0 ? <PrimaryButton label="Continuer" onPress={() => setStep(1)} /> : null}
-        {step === 3 ? <PrimaryButton label="Commencer" onPress={finish} icon={<Icon name="check" size={18} color="#fff" />} /> : null}
         {step === 1 || step === 2 ? <Text style={styles.hint}>Touche une option pour continuer</Text> : null}
       </View>
     </Screen>
@@ -129,13 +159,16 @@ const styles = StyleSheet.create({
   archLabel: { fontFamily: font.displaySemiBold, fontSize: 17, color: colors.ink },
   archLabelOn: { color: colors.accentInk },
   archSub: { fontFamily: font.body, fontSize: 13, color: colors.ink3, marginTop: 2 },
-  // étape localisation — visuellement distincte
   locHero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   ringWrap: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   ringCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   locTitle: { fontFamily: font.displayBold, fontSize: 26, color: colors.ink, textAlign: 'center', letterSpacing: -0.5 },
   locSub: { ...text.body, textAlign: 'center', maxWidth: 300 },
-  locToggle: { alignSelf: 'stretch', marginTop: 8, padding: 16, borderRadius: radius.card, backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent },
-  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 16 },
+  locActions: { alignSelf: 'stretch', gap: 10, marginTop: 8 },
+  laterBtn: { alignSelf: 'center', paddingVertical: 8 },
+  later: { fontFamily: font.bodySemiBold, fontSize: 15, color: colors.ink3 },
+  denyCard: { alignSelf: 'stretch', gap: 10, marginTop: 8, padding: 16, borderRadius: radius.card, backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent },
+  denyTxt: { ...text.body, color: colors.accentInk, textAlign: 'center' },
+  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 16, minHeight: 60 },
   hint: { fontFamily: font.body, fontSize: 13, color: colors.ink3 },
 });

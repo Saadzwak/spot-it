@@ -33,7 +33,7 @@ export default function ProfileScreen() {
     .slice(0, 7);
   const max = top.length ? top[0][1] : 1;
 
-  const onReset = () => { reset(); router.replace('/onboarding'); };
+  const onReset = () => { reset(); router.replace('/welcome'); };
 
   return (
     <Screen scroll padded>
