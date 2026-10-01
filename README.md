@@ -47,6 +47,8 @@ Voir [`.env.example`](.env.example) (placeholders uniquement — jamais de vraie
 
 > 🔒 Les `EXPO_PUBLIC_*` sont inlinés dans le bundle (c'est voulu : `pk.` + clé anon sont publiques par design). Les clés serveur restent hors bundle.
 
+> ⚠️ **Note sécurité.** Un ancien token Mapbox public (`pk.`) a pu apparaître dans un build web committé (`dist-web/`, désormais retiré du repo et de l'historique courant). **Ce token a été révoqué côté Mapbox et ne fonctionne plus** — s'il subsiste dans d'anciens commits, il est inutilisable. Fournissez votre propre token `pk.` (restreint par URL) dans votre `.env` local.
+
 ## Architecture
 
 ```
