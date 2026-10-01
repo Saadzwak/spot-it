@@ -15,6 +15,7 @@ yarn-error.*
 # ── Expo ──────────────────────────────────────────────────
 .expo/
 dist/
+dist-web/
 .export-check/
 .ci-export/
 .ci-web/
@@ -49,3 +50,10 @@ VCA.zip
 
 # one-off local DB setup script (never commit)
 _dbsetup.mjs
+
+# ── Local-only artefacts (NOT for the public repo) ─────────
+# Confidential pitch deck + its render, and the dev QR — kept local only.
+pitch-galeries-lafayette.html
+deck-galeries-lafayette.pdf
+spotit-qr.png
+*.pitch.html
